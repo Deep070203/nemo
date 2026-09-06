@@ -1,0 +1,130 @@
+"""Trade entropy and wash-trading detection module."""
+
+import math
+from typing import List, Dict, Optional
+import numpy as np
+from pydantic import BaseModel, Field
+
+
+class EntropyResult(BaseModel):
+    mint: str
+    total_trades_analyzed: int
+    shannon_entropy: float
+    sign_autocorrelation: float
+    most_common_size_pct: float
+    is_wash_trading: bool
+    risk_level: str  # LOW, MEDIUM, HIGH, CRITICAL
+    flags: List[str] = Field(default_factory=list)
+
+
+class TradeEntropyDetector:
+    """Calculates Shannon entropy and trade sign autocorrelation to unmask synthetic volume bots."""
+
+    def __init__(self, min_trades_required: int = 10, low_entropy_threshold: float = 2.0):
+        self.min_trades_required = min_trades_required
+        self.low_entropy_threshold = low_entropy_threshold
+
+    def compute(self, mint: str, trades: List[dict]) -> EntropyResult:
+        """Analyze trade sizes and sequence signs for wash trading fingerprints.
+
+        Each trade dict should contain:
+          - 'tx_type': 'buy' or 'sell'
+          - 'sol_amount': float
+        """
+        if len(trades) < self.min_trades_required:
+            return EntropyResult(
+                mint=mint,
+                total_trades_analyzed=len(trades),
+                shannon_entropy=0.0,
+                sign_autocorrelation=0.0,
+                most_common_size_pct=0.0,
+                is_wash_trading=False,
+                risk_level="UNKNOWN",
+                flags=["INSUFFICIENT_TRADES_FOR_ENTROPY"]
+            )
+
+        sol_sizes = [max(0.0001, t.get("sol_amount", 0.0)) for t in trades]
+        tx_signs = [1 if t.get("tx_type", "buy").lower() == "buy" else -1 for t in trades]
+
+        # 1. Calculate Shannon Entropy on discretized trade sizes
+        entropy = self._calculate_shannon_entropy(sol_sizes)
+
+        # 2. Calculate Lag-1 Autocorrelation of trade signs
+        autocorr = self._calculate_sign_autocorrelation(tx_signs)
+
+        # 3. Check for repetitive identical order sizes (mode dominance)
+        rounded_sizes = [round(s, 3) for s in sol_sizes]
+        counts: Dict[float, int] = {}
+        for s in rounded_sizes:
+            counts[s] = counts.get(s, 0) + 1
+
+        most_common_count = max(counts.values()) if counts else 0
+        most_common_pct = (most_common_count / len(rounded_sizes)) * 100.0
+
+        # Assess wash-trading rules
+        flags: List[str] = []
+        is_wash = False
+        risk = "LOW"
+
+        if entropy < self.low_entropy_threshold and len(trades) >= 15:
+            is_wash = True
+            risk = "HIGH"
+            flags.append(f"LOW_TRADE_ENTROPY ({entropy:.2f} < {self.low_entropy_threshold})")
+
+        if most_common_pct >= 40.0 and len(trades) >= 15:
+            is_wash = True
+            risk = "CRITICAL"
+            flags.append(f"REPETITIVE_ORDER_SIZES ({most_common_pct:.1f}% trades identical)")
+
+        # Negative autocorrelation indicates alternating buy/sell bot churn
+        if autocorr < -0.40 and len(trades) >= 20:
+            is_wash = True
+            if risk != "CRITICAL":
+                risk = "HIGH"
+            flags.append(f"ALTERNATING_BOT_CHURN (Autocorr: {autocorr:.2f})")
+
+        return EntropyResult(
+            mint=mint,
+            total_trades_analyzed=len(trades),
+            shannon_entropy=entropy,
+            sign_autocorrelation=autocorr,
+            most_common_size_pct=most_common_pct,
+            is_wash_trading=is_wash,
+            risk_level=risk,
+            flags=flags
+        )
+
+    def _calculate_shannon_entropy(self, sizes: List[float], num_bins: int = 15) -> float:
+        """Compute Shannon entropy across log-binned order sizes."""
+        if not sizes:
+            return 0.0
+
+        # Use log10 scale so 0.01 SOL, 0.1 SOL, 1.0 SOL, 10 SOL map evenly
+        log_sizes = np.log10(np.array(sizes) + 1e-6)
+        hist, _ = np.histogram(log_sizes, bins=num_bins)
+
+        total = np.sum(hist)
+        if total == 0:
+            return 0.0
+
+        probabilities = hist / total
+        probabilities = probabilities[probabilities > 0]  # Filter zero bins
+
+        entropy = -np.sum(probabilities * np.log2(probabilities))
+        return float(entropy)
+
+    def _calculate_sign_autocorrelation(self, signs: List[int]) -> float:
+        """Calculate lag-1 autocorrelation of trade signs (+1 for buy, -1 for sell)."""
+        if len(signs) < 5:
+            return 0.0
+
+        arr = np.array(signs, dtype=np.float64)
+        mean = np.mean(arr)
+        variance = np.var(arr)
+
+        if variance == 0:
+            return 1.0  # All buys or all sells
+
+        # Lag-1 covariance
+        lag1_cov = np.mean((arr[:-1] - mean) * (arr[1:] - mean))
+        return float(lag1_cov / variance)

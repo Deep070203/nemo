@@ -3,6 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Local research databases
+data/
+*.duckdb*
+
 # C extensions
 *.so
 
