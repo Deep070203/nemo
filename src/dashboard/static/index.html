@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nemo — Real-Time Pump.fun Forensic Screener & Research HUD</title>
+  <meta name="description" content="Quantitative research dashboard and real-time forensic detection engine for Pump.fun tokens on Solana.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation & Stats Bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand">
+          <div class="brand-badge">⚡</div>
+          <div class="brand-text">
+            <h1 class="brand-title">NEMO</h1>
+            <span class="brand-subtitle">PUMP.FUN QUANT FORENSICS</span>
+          </div>
+        </div>
+        <div class="stream-status" id="streamStatus">
+          <span class="pulse-dot"></span>
+          <span id="statusText">CONNECTING STREAM</span>
+        </div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat-card" id="statTokensCard">
+          <span class="stat-label">TOKENS TRACKED</span>
+          <span class="stat-value" id="statTokensCount">0</span>
+        </div>
+        <div class="stat-card" id="statTradesCard">
+          <span class="stat-label">TRADES LOGGED</span>
+          <span class="stat-value" id="statTradesCount">0</span>
+        </div>
+        <div class="stat-card danger" id="statRugsCard">
+          <span class="stat-label">FLAGGED SOFT RUGS</span>
+          <span class="stat-value" id="statRugsCount">0</span>
+        </div>
+        <div class="stat-card warning" id="statHighRiskCard">
+          <span class="stat-label">HIGH RISK RATIO</span>
+          <span class="stat-value" id="statRiskRatio">0%</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnRunAudit" class="btn btn-secondary">⚡ Re-Audit Active</button>
+        <button id="btnViewSurvival" class="btn btn-primary">📊 Survival Model</button>
+      </div>
+    </header>
+
+    <!-- Main Multi-Column HUD Layout -->
+    <main class="dashboard-grid">
+      
+      <!-- LEFT COLUMN: Live Token Ingestion Stream -->
+      <section class="panel panel-left" aria-labelledby="tokensFeedHeading">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <h2 id="tokensFeedHeading" class="panel-title">LIVE TOKEN STREAM</h2>
+            <span class="badge badge-pulse" id="liveTokenCounter">0 tokens</span>
+          </div>
+          <div class="filter-bar">
+            <input type="text" id="tokenSearchInput" placeholder="Filter symbol, mint, or dev..." autocomplete="off">
+            <div class="filter-chips">
+              <button class="chip active" data-filter="all">ALL</button>
+              <button class="chip chip-green" data-filter="clean">CLEAN</button>
+              <button class="chip chip-yellow" data-filter="medium">MEDIUM</button>
+              <button class="chip chip-red" data-filter="critical">RUG / HIGH</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="token-stream-list" id="tokenStreamContainer">
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <span>Listening to pumpdev.io live WebSocket stream...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CENTER COLUMN: Deep Forensic Inspector -->
+      <section class="panel panel-center" aria-labelledby="inspectorHeading">
+        <div class="panel-header">
+          <h2 id="inspectorHeading" class="panel-title">DEEP FORENSIC AUDIT</h2>
+          <div class="inspector-controls">
+            <span class="mono-tag" id="selectedMintTag">NO TOKEN SELECTED</span>
+            <button id="btnCopyMint" class="btn-icon" title="Copy Mint" style="display:none;">📋</button>
+            <a id="btnPumpLink" href="#" target="_blank" class="btn-icon" title="View on Pump.fun" style="display:none;">🔗</a>
+          </div>
+        </div>
+
+        <div class="inspector-body" id="inspectorBody">
+          <!-- Empty State -->
+          <div class="inspector-placeholder" id="inspectorPlaceholder">
+            <div class="placeholder-icon">🔬</div>
+            <h3>Select Any Token to Audit</h3>
+            <p>Click on any incoming token on the left stream to inspect on-chain Block-0 bundles, Jito tips, Sybil wallet clusters, and VPIN order flow toxicity.</p>
+          </div>
+
+          <!-- Active Inspector Content (Hidden initially) -->
+          <div class="inspector-content" id="inspectorContent" style="display: none;">
+            
+            <!-- Hero Token Overview Banner -->
+            <div class="token-hero">
+              <div class="token-hero-meta">
+                <div class="token-avatar" id="inspectorAvatar">?</div>
+                <div>
+                  <h3 class="token-hero-name" id="inspectorName">Token Name</h3>
+                  <div class="token-hero-sub">
+                    <span class="token-hero-symbol" id="inspectorSymbol">SYMBOL</span>
+                    <span class="token-hero-created" id="inspectorCreatedAt">just now</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Composite Risk Gauge Widget -->
+              <div class="risk-gauge-widget">
+                <div class="gauge-circle" id="riskGaugeCircle">
+                  <span class="gauge-value" id="riskScoreVal">0</span>
+                  <span class="gauge-label">RISK</span>
+                </div>
+                <div class="risk-tier-badge" id="riskTierBadge">ANALYZING</div>
+              </div>
+            </div>
+
+            <!-- Triggered Flags Alert Box -->
+            <div class="flags-container" id="inspectorFlagsContainer">
+              <h4 class="section-title">Triggered Alerts & Forensic Flags</h4>
+              <div class="flags-list" id="inspectorFlagsList">
+                <span class="flag-pill clean">No malicious heuristics triggered</span>
+              </div>
+            </div>
+
+            <!-- 4-Quadrant Forensics Breakdown Grid -->
+            <div class="forensics-quad-grid">
+              
+              <!-- Card 1: Block-0 & Jito Sniping -->
+              <div class="quad-card" id="cardBlock0">
+                <div class="quad-card-header">
+                  <span class="quad-icon">📦</span>
+                  <h4>Block-0 & Jito Bundles</h4>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Block-0 Acquired Supply</span>
+                  <span class="m-val" id="valBlock0Supply">0.0%</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Jito MEV Tip Status</span>
+                  <span class="m-val" id="valJitoStatus">None</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Creation Slot</span>
+                  <span class="m-val mono" id="valSlot">0</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Block-0 Unique Buyers</span>
+                  <span class="m-val" id="valUniqueBlock0Buyers">0</span>
+                </div>
+              </div>
+
+              <!-- Card 2: Sybil & Wealth Concentration -->
+              <div class="quad-card" id="cardSybil">
+                <div class="quad-card-header">
+                  <span class="quad-icon">🕸️</span>
+                  <h4>Sybil Rings & Concentration</h4>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">HHI Concentration Score</span>
+                  <span class="m-val" id="valHHI">0</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Gini Inequality Index</span>
+                  <span class="m-val" id="valGini">0.00</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Largest Cabal Cluster Share</span>
+                  <span class="m-val" id="valClusterShare">0.0%</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Distribution Tier</span>
+                  <span class="m-val" id="valDistTier">Moderate</span>
+                </div>
+              </div>
+
+              <!-- Card 3: Microstructure Toxicity -->
+              <div class="quad-card" id="cardMicro">
+                <div class="quad-card-header">
+                  <span class="quad-icon">📊</span>
+                  <h4>Microstructure & Flow</h4>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">VPIN Flow Toxicity</span>
+                  <span class="m-val" id="valVPIN">0.00</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Trade Size Shannon Entropy</span>
+                  <span class="m-val" id="valEntropy">0.00</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Sign Autocorrelation (Lag 1)</span>
+                  <span class="m-val" id="valAutocorr">0.00</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Wash-Trading Bot Churn</span>
+                  <span class="m-val" id="valWashStatus">Clean</span>
+                </div>
+              </div>
+
+              <!-- Card 4: Meme Clones & Socials -->
+              <div class="quad-card" id="cardSocial">
+                <div class="quad-card-header">
+                  <span class="quad-icon">🖼️</span>
+                  <h4>Meme Clones & Socials</h4>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">pHash Meme Originality</span>
+                  <span class="m-val" id="valPhash">Unique</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">X / Twitter Status</span>
+                  <span class="m-val" id="valTwitter">Missing</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Telegram Channel</span>
+                  <span class="m-val" id="valTelegram">Missing</span>
+                </div>
+                <div class="metric-row">
+                  <span class="m-label">Social Authenticity Score</span>
+                  <span class="m-val" id="valSocialScore">0/100</span>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Live Trade Tape & Survival Analytics -->
+      <section class="panel panel-right" aria-labelledby="tapeHeading">
+        <div class="panel-header">
+          <div class="tabs-nav">
+            <button class="tab-btn active" id="tabTradeTape">LIVE TAPE</button>
+            <button class="tab-btn" id="tabSurvival">SURVIVAL MODEL</button>
+          </div>
+        </div>
+
+        <!-- Tab 1: Live Trade Tape -->
+        <div class="tab-view active" id="viewTradeTape">
+          <div class="tape-stream-list" id="tradeTapeContainer">
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <span>Awaiting trades on active curves...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Survival & Hazard Regression -->
+        <div class="tab-view" id="viewSurvival">
+          <div class="survival-view-content">
+            <div class="survival-summary-box">
+              <h4>arXiv:2608.20271 Survival Methodology</h4>
+              <p>Cox Proportional Hazards model evaluating instantaneous rate of liquidity collapse $\lambda(t)$ as a function of early 5-minute features.</p>
+            </div>
+            
+            <h5 class="subhead">Top Hazard Ratio Multipliers ($\exp(\beta)$)</h5>
+            <div class="hr-list" id="hazardRatiosList">
+              <div class="loading-state">
+                <div class="spinner"></div>
+                <span>Computing survival regression...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
