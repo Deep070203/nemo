@@ -6,6 +6,16 @@
 (function () {
   'use strict';
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // State Management
   const state = {
     tokens: new Map(), // mint -> token object
@@ -373,7 +383,7 @@
     renderInspector(tok, audit);
   }
 
-  function renderInspector(tok, audit) {
+  function renderInspector(tok, audit, mlInfo = null, survivalInfo = null, features = null) {
     dom.inspectorPlaceholder.style.display = 'none';
     dom.inspectorContent.style.display = 'block';
 
@@ -577,7 +587,7 @@
       const data = await res.json();
 
       if (data.status === 'insufficient_data') {
-        dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Insufficient token records (${data.count} found). Need >= 5 tokens to fit Cox model.</span></div>';
+        dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Insufficient token records (${data.count} found). Need >= 5 tokens to fit Cox model.</span></div>`;
         return;
       }
 
@@ -595,7 +605,7 @@
         }).join('');
       }
     } catch (err) {
-      dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Error loading survival data: ${err.message}</span></div>';
+      dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Error loading survival data: ${err.message}</span></div>`;
     }
   }
 
@@ -823,19 +833,20 @@
 
   function switchViewMode(mode) {
     if (mode === 'stream') {
-      dom.btnViewLiveStream.classList.add('active');
-      dom.btnViewCohorts.classList.remove('active');
-      dom.streamDashboardView.style.display = 'grid';
-      dom.cohortDashboardView.style.display = 'none';
+      if (dom.btnViewLiveStream) dom.btnViewLiveStream.classList.add('active');
+      if (dom.btnViewCohorts) dom.btnViewCohorts.classList.remove('active');
+      if (dom.streamDashboardView) dom.streamDashboardView.style.display = 'grid';
+      if (dom.cohortDashboardView) dom.cohortDashboardView.style.display = 'none';
     } else {
-      dom.btnViewLiveStream.classList.remove('active');
-      dom.btnViewCohorts.classList.add('active');
-      dom.streamDashboardView.style.display = 'none';
-      dom.cohortDashboardView.style.display = 'flex';
+      if (dom.btnViewLiveStream) dom.btnViewLiveStream.classList.remove('active');
+      if (dom.btnViewCohorts) dom.btnViewCohorts.classList.add('active');
+      if (dom.streamDashboardView) dom.streamDashboardView.style.display = 'none';
+      if (dom.cohortDashboardView) dom.cohortDashboardView.style.display = 'flex';
       fetchCohortSummary();
       switchCohortBucketTab(activeCohortBucket);
     }
   }
+  window.switchViewMode = switchViewMode;
 
   async function fetchCohortSummary() {
     try {
@@ -883,6 +894,7 @@
       loadLearningMetrics();
     }
   }
+  window.switchCohortBucketTab = switchCohortBucketTab;
 
   async function loadBucketRugs() {
     if (!dom.rugsTableBody) return;

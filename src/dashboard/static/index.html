@@ -7,62 +7,79 @@
   <meta name="description" content="Quantitative research dashboard and real-time forensic detection engine for Pump.fun tokens on Solana.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=3.5">
 </head>
 <body>
   <div class="app-container">
-    <!-- Top Navigation & Stats Bar -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="brand">
-          <div class="brand-badge">⚡</div>
-          <div class="brand-text">
+    
+    <!-- Unified Top Master Navigation Bar -->
+    <header class="master-header">
+      <div class="master-header-inner">
+        
+        <!-- Brand identity -->
+        <div class="brand-group">
+          <div class="brand-badge-glow">⚡</div>
+          <div class="brand-info">
             <h1 class="brand-title">NEMO</h1>
-            <span class="brand-subtitle">PUMP.FUN QUANT FORENSICS</span>
+            <span class="brand-tag">PUMP.FUN QUANT LABS</span>
+          </div>
+          <div class="network-badge" id="streamStatus">
+            <span class="pulse-dot"></span>
+            <span id="statusText">CONNECTING STREAM</span>
           </div>
         </div>
-        <div class="stream-status" id="streamStatus">
-          <span class="pulse-dot"></span>
-          <span id="statusText">CONNECTING STREAM</span>
+
+        <!-- Master View Switcher (Segmented Control) -->
+        <div class="master-view-switcher">
+          <button class="switcher-btn active" id="btnViewLiveStream" onclick="window.switchViewMode('stream')">
+            <span class="btn-icon">⚡</span>
+            <span>LIVE FORENSICS</span>
+          </button>
+          <button class="switcher-btn" id="btnViewCohorts" onclick="window.switchViewMode('cohorts')">
+            <span class="btn-icon">🗂️</span>
+            <span>COHORT AUDIT & LEARNING</span>
+            <span class="switcher-pill" id="cohortPendingBadge">0</span>
+          </button>
+        </div>
+
+        <!-- Header Controls & Survival Trigger -->
+        <div class="header-right-actions">
+          <button id="btnRunAudit" class="btn btn-secondary btn-sm">⚡ Re-Audit Active</button>
+          <button id="btnViewSurvival" class="btn btn-accent btn-sm">📊 Survival Model</button>
         </div>
       </div>
 
-      <div class="header-stats">
-        <div class="stat-card" id="statTokensCard">
-          <span class="stat-label">TOKENS TRACKED</span>
-          <span class="stat-value" id="statTokensCount">0</span>
-        </div>
-        <div class="stat-card" id="statTradesCard">
-          <span class="stat-label">TRADES LOGGED</span>
-          <span class="stat-value" id="statTradesCount">0</span>
-        </div>
-        <div class="stat-card danger" id="statRugsCard">
-          <span class="stat-label">FLAGGED SOFT RUGS</span>
-          <span class="stat-value" id="statRugsCount">0</span>
-        </div>
-        <div class="stat-card warning" id="statHighRiskCard">
-          <span class="stat-label">HIGH RISK RATIO</span>
-          <span class="stat-value" id="statRiskRatio">0%</span>
-        </div>
-      </div>
-
-      <div class="header-actions">
-        <button id="btnRunAudit" class="btn btn-secondary">⚡ Re-Audit Active</button>
-        <button id="btnViewSurvival" class="btn btn-primary">📊 Survival Model</button>
-      </div>
-    </header>
-
-    <!-- Dedicated Coin Inspector Search & Audit Strip -->
-    <div class="inspect-search-strip">
-      <div class="inspect-search-inner">
-        <div class="inspect-search-input-wrap">
-          <span class="search-lens">🔍</span>
-          <input type="text" id="inspectCoinInput" placeholder="Paste ANY address to audit (e.g. 7Y1Cv...pump, HcRLc..., or EVM contract 0x39dB...)" autocomplete="off" />
+      <!-- Integrated Omnibar & Telemetry Strip -->
+      <div class="sub-command-strip">
+        <div class="omni-search-box">
+          <span class="omni-lens">🔍</span>
+          <input type="text" id="inspectCoinInput" placeholder="Paste ANY Solana mint or EVM address to inspect (e.g. 7Y1Cv...pump, HcRLc..., or 0x39dB...)" autocomplete="off" />
           <button id="btnInspectClear" class="btn-clear-search" title="Clear" style="display: none;">✕</button>
+          <button id="btnInspectCoin" class="btn btn-primary btn-sm">⚡ Audit & Predict</button>
         </div>
-        <button id="btnInspectCoin" class="btn btn-primary btn-inspect">⚡ Audit & Predict</button>
+
+        <!-- Real-time telemetry badges -->
+        <div class="telemetry-badges">
+          <div class="tele-item">
+            <span class="tele-label">TOKENS</span>
+            <span class="tele-val" id="statTokensCount">0</span>
+          </div>
+          <div class="tele-item">
+            <span class="tele-label">TRADES</span>
+            <span class="tele-val" id="statTradesCount">0</span>
+          </div>
+          <div class="tele-item danger">
+            <span class="tele-label">SOFT RUGS</span>
+            <span class="tele-val" id="statRugsCount">0</span>
+          </div>
+          <div class="tele-item warning">
+            <span class="tele-label">HIGH RISK</span>
+            <span class="tele-val" id="statRiskRatio">0%</span>
+          </div>
+        </div>
       </div>
+
       <!-- EVM Cross-Chain Diagnostic Banner -->
       <div id="evmDiagnosticBanner" class="evm-banner" style="display: none;">
         <div class="evm-banner-header">
@@ -81,18 +98,7 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Top Mode View Navigation Switcher -->
-    <nav class="view-mode-nav">
-      <button class="view-nav-btn active" id="btnViewLiveStream">
-        <span class="nav-icon">⚡</span> REAL-TIME FORENSIC STREAM
-      </button>
-      <button class="view-nav-btn" id="btnViewCohorts">
-        <span class="nav-icon">🗂️</span> COHORT AUDIT & LEARNING HUD
-        <span class="badge-pill" id="cohortPendingBadge">0</span>
-      </button>
-    </nav>
+    </header>
 
     <!-- Main Multi-Column HUD Layout (Stream View) -->
     <main class="dashboard-grid" id="streamDashboardView">
@@ -401,16 +407,16 @@
 
       <!-- Cohort Navigation Tabs -->
       <div class="cohort-tabs-nav">
-        <button class="cohort-tab-btn active" id="tabBtnRugs" data-bucket="rugs">
+        <button class="cohort-tab-btn active" id="tabBtnRugs" data-bucket="rugs" onclick="window.switchCohortBucketTab('rugs')">
           💀 Rug Graveyard (<span id="countTabRugs">0</span>)
         </button>
-        <button class="cohort-tab-btn" id="tabBtnSurvivors" data-bucket="survivors">
+        <button class="cohort-tab-btn" id="tabBtnSurvivors" data-bucket="survivors" onclick="window.switchCohortBucketTab('survivors')">
           🛡️ Surviving Candidates (<span id="countTabSurvivors">0</span>)
         </button>
-        <button class="cohort-tab-btn" id="tabBtnReaudit" data-bucket="reaudit">
+        <button class="cohort-tab-btn" id="tabBtnReaudit" data-bucket="reaudit" onclick="window.switchCohortBucketTab('reaudit')">
           🔍 Multi-Day Re-Audit (<span id="countTabReaudit">0</span>)
         </button>
-        <button class="cohort-tab-btn" id="tabBtnLearning" data-bucket="learning">
+        <button class="cohort-tab-btn" id="tabBtnLearning" data-bucket="learning" onclick="window.switchCohortBucketTab('learning')">
           🧠 Active Learning & Model Feedback
         </button>
       </div>
@@ -616,6 +622,6 @@
     </main>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=3.5"></script>
 </body>
 </html>
