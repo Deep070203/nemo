@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 import duckdb
@@ -99,6 +100,37 @@ class DuckDBStorage:
                 details VARCHAR,
                 created_at TIMESTAMP
             );
+        """)
+
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS token_audits (
+                mint VARCHAR PRIMARY KEY,
+                name VARCHAR,
+                symbol VARCHAR,
+                status VARCHAR DEFAULT 'NEW',
+                stage1_audited_at TIMESTAMP,
+                stage2_audited_at TIMESTAMP,
+                initial_risk_score INTEGER DEFAULT 0,
+                initial_risk_tier VARCHAR DEFAULT 'LOW',
+                current_price_usd DOUBLE DEFAULT 0.0,
+                current_mcap_usd DOUBLE DEFAULT 0.0,
+                peak_mcap_usd DOUBLE DEFAULT 0.0,
+                volume_24h DOUBLE DEFAULT 0.0,
+                price_change_24h DOUBLE DEFAULT 0.0,
+                is_graduated BOOLEAN DEFAULT FALSE,
+                dev_balance_pct DOUBLE DEFAULT 0.0,
+                audit_notes VARCHAR,
+                human_verdict VARCHAR,
+                human_notes VARCHAR,
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP
+            );
+        """)
+        self._conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audits_status ON token_audits(status);
+        """)
+        self._conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audits_created ON token_audits(created_at);
         """)
 
     async def start(self) -> None:
@@ -225,6 +257,231 @@ class DuckDBStorage:
         self._conn.execute(f"COPY tokens TO '{out_path / 'tokens.parquet'}' (FORMAT PARQUET);")
         self._conn.execute(f"COPY trades TO '{out_path / 'trades.parquet'}' (FORMAT PARQUET);")
 
+    def upsert_token_audit(self, audit: Dict[str, Any]) -> None:
+        """Upsert a token audit outcome record into DuckDB."""
+        mint = audit.get("mint")
+        if not mint:
+            return
+
+        cols = [
+            "mint", "name", "symbol", "status", "stage1_audited_at", "stage2_audited_at",
+            "initial_risk_score", "initial_risk_tier", "current_price_usd", "current_mcap_usd",
+            "peak_mcap_usd", "volume_24h", "price_change_24h", "is_graduated", "dev_balance_pct",
+            "audit_notes", "human_verdict", "human_notes", "created_at", "updated_at"
+        ]
+
+        # Ensure defaults
+        row = {c: audit.get(c) for c in cols}
+        row["status"] = row["status"] or "NEW"
+        row["initial_risk_score"] = int(row["initial_risk_score"] or 0)
+        row["initial_risk_tier"] = row["initial_risk_tier"] or "LOW"
+        row["current_price_usd"] = float(row["current_price_usd"] or 0.0)
+        row["current_mcap_usd"] = float(row["current_mcap_usd"] or 0.0)
+        row["peak_mcap_usd"] = float(row["peak_mcap_usd"] or 0.0)
+        row["volume_24h"] = float(row["volume_24h"] or 0.0)
+        row["price_change_24h"] = float(row["price_change_24h"] or 0.0)
+        row["is_graduated"] = bool(row["is_graduated"] or False)
+        row["dev_balance_pct"] = float(row["dev_balance_pct"] or 0.0)
+
+        self._conn.execute("""
+            INSERT OR REPLACE INTO token_audits (
+                mint, name, symbol, status, stage1_audited_at, stage2_audited_at,
+                initial_risk_score, initial_risk_tier, current_price_usd, current_mcap_usd,
+                peak_mcap_usd, volume_24h, price_change_24h, is_graduated, dev_balance_pct,
+                audit_notes, human_verdict, human_notes, created_at, updated_at
+            ) VALUES (
+                $mint, $name, $symbol, $status, $stage1_audited_at, $stage2_audited_at,
+                $initial_risk_score, $initial_risk_tier, $current_price_usd, $current_mcap_usd,
+                $peak_mcap_usd, $volume_24h, $price_change_24h, $is_graduated, $dev_balance_pct,
+                $audit_notes, $human_verdict, $human_notes, $created_at, $updated_at
+            );
+        """, row)
+
+    def get_tokens_due_for_t1_audit(self, hours_threshold: float = 10.0, limit: int = 60) -> List[Dict[str, Any]]:
+        """Find tokens created >= hours_threshold ago that need stage 1 rug audit."""
+        # DuckDB query joining tokens and token_audits
+        query = f"""
+            SELECT 
+                t.mint, t.name, t.symbol, t.creator, t.initial_buy, t.sol_amount, 
+                t.created_at,
+                COALESCE(a.status, 'NEW') AS audit_status,
+                a.stage1_audited_at
+            FROM tokens t
+            LEFT JOIN token_audits a ON t.mint = a.mint
+            WHERE (a.status IS NULL OR a.status = 'NEW' OR a.stage1_audited_at IS NULL)
+              AND t.created_at <= (CURRENT_TIMESTAMP - INTERVAL '{hours_threshold} hours')
+            ORDER BY t.created_at ASC
+            LIMIT {limit};
+        """
+        try:
+            df = self._conn.execute(query).df()
+            return df.to_dict(orient="records")
+        except Exception:
+            return []
+
+    def get_tokens_due_for_t2_audit(self, days_threshold: float = 3.0, limit: int = 60) -> List[Dict[str, Any]]:
+        """Find tokens surviving stage 1 that are >= days_threshold old for long-term re-audit."""
+        query = f"""
+            SELECT 
+                a.*,
+                t.creator,
+                t.initial_buy
+            FROM token_audits a
+            JOIN tokens t ON a.mint = t.mint
+            WHERE a.status = 'SURVIVING_CANDIDATE'
+              AND a.stage2_audited_at IS NULL
+              AND a.created_at <= (CURRENT_TIMESTAMP - INTERVAL '{days_threshold} days')
+            ORDER BY a.created_at ASC
+            LIMIT {limit};
+        """
+        try:
+            df = self._conn.execute(query).df()
+            return df.to_dict(orient="records")
+        except Exception:
+            return []
+
+    def get_audit_bucket(self, bucket: str, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Fetch tokens classified into specific research buckets."""
+        bucket = bucket.lower()
+        where_clause = "1=1"
+        if bucket == "rugs":
+            where_clause = "status IN ('CONFIRMED_RUG', 'SLOW_RUG')"
+        elif bucket == "survivors":
+            where_clause = "status IN ('SURVIVING_CANDIDATE', 'GRADUATED', 'CTO')"
+        elif bucket == "reaudit":
+            where_clause = "status = 'SURVIVING_CANDIDATE' AND (human_verdict IS NULL OR human_verdict = '')"
+        elif bucket == "all":
+            where_clause = "1=1"
+        else:
+            where_clause = f"status = '{bucket.upper()}'"
+
+        query = f"""
+            SELECT * FROM token_audits
+            WHERE {where_clause}
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT {limit} OFFSET {offset};
+        """
+        try:
+            df = self._conn.execute(query).df()
+            return df.to_dict(orient="records")
+        except Exception:
+            return []
+
+    def record_human_audit(self, mint: str, verdict: str, notes: str = "") -> bool:
+        """Record manual verification/feedback for active learning."""
+        now = datetime.now(timezone.utc)
+        status_map = {
+            "CONFIRMED_RUG": "CONFIRMED_RUG",
+            "SLOW_RUG": "SLOW_RUG",
+            "GRADUATED": "GRADUATED",
+            "CTO": "CTO",
+            "SURVIVOR": "SURVIVING_CANDIDATE"
+        }
+        new_status = status_map.get(verdict.upper(), verdict.upper())
+
+        res = self._conn.execute("""
+            UPDATE token_audits
+            SET human_verdict = $1,
+                human_notes = $2,
+                status = $3,
+                stage2_audited_at = COALESCE(stage2_audited_at, $4),
+                updated_at = $4
+            WHERE mint = $5;
+        """, [verdict.upper(), notes, new_status, now, mint])
+        return True
+
+    def get_cohort_summary_stats(self) -> Dict[str, Any]:
+        """Aggregate counts and accuracy metrics for the cohort dashboard."""
+        try:
+            counts = self._conn.execute("""
+                SELECT status, COUNT(*) FROM token_audits GROUP BY status;
+            """).fetchall()
+            status_counts = {row[0]: row[1] for row in counts}
+
+            # Human audited count
+            human_reviewed = self._conn.execute("""
+                SELECT COUNT(*) FROM token_audits WHERE human_verdict IS NOT NULL AND human_verdict != '';
+            """).fetchone()[0]
+
+            # Tokens eligible for T1 audit
+            due_t1 = len(self.get_tokens_due_for_t1_audit(hours_threshold=10.0, limit=500))
+            # Tokens eligible for T2 audit
+            due_t2 = len(self.get_tokens_due_for_t2_audit(days_threshold=3.0, limit=500))
+
+            total_audited = sum(status_counts.values())
+
+            # Calculate preliminary precision/accuracy
+            # A true positive is initial_risk_tier in ('HIGH', 'CRITICAL') and status in ('CONFIRMED_RUG', 'SLOW_RUG')
+            eval_rows = self._conn.execute("""
+                SELECT 
+                    initial_risk_tier,
+                    status,
+                    human_verdict
+                FROM token_audits
+                WHERE status != 'NEW';
+            """).fetchall()
+
+            tp, fp, tn, fn = 0, 0, 0, 0
+            for row in eval_rows:
+                pred_rug = row[0] in ('HIGH', 'CRITICAL')
+                actual_rug = row[1] in ('CONFIRMED_RUG', 'SLOW_RUG')
+                if pred_rug and actual_rug:
+                    tp += 1
+                elif pred_rug and not actual_rug:
+                    fp += 1
+                elif not pred_rug and not actual_rug:
+                    tn += 1
+                elif not pred_rug and actual_rug:
+                    fn += 1
+
+            total_eval = tp + fp + tn + fn
+            accuracy = round(((tp + tn) / total_eval) * 100.0, 1) if total_eval > 0 else 0.0
+            precision = round((tp / (tp + fp)) * 100.0, 1) if (tp + fp) > 0 else 0.0
+            recall = round((tp / (tp + fn)) * 100.0, 1) if (tp + fn) > 0 else 0.0
+
+            return {
+                "total_audits": total_audited,
+                "confirmed_rugs": status_counts.get("CONFIRMED_RUG", 0) + status_counts.get("SLOW_RUG", 0),
+                "surviving_candidates": status_counts.get("SURVIVING_CANDIDATE", 0),
+                "graduated_runners": status_counts.get("GRADUATED", 0),
+                "cto_takeovers": status_counts.get("CTO", 0),
+                "pending_t1_audit": due_t1,
+                "pending_t2_reaudit": due_t2,
+                "human_reviewed_count": human_reviewed,
+                "learning_metrics": {
+                    "total_evaluated": total_eval,
+                    "accuracy_pct": accuracy,
+                    "precision_pct": precision,
+                    "recall_pct": recall,
+                    "true_positives": tp,
+                    "false_positives_cto": fp,
+                    "false_negatives_missed": fn,
+                    "true_negatives": tn
+                }
+            }
+        except Exception as e:
+            return {
+                "total_audits": 0,
+                "confirmed_rugs": 0,
+                "surviving_candidates": 0,
+                "graduated_runners": 0,
+                "cto_takeovers": 0,
+                "pending_t1_audit": 0,
+                "pending_t2_reaudit": 0,
+                "human_reviewed_count": 0,
+                "learning_metrics": {
+                    "total_evaluated": 0,
+                    "accuracy_pct": 0.0,
+                    "precision_pct": 0.0,
+                    "recall_pct": 0.0,
+                    "true_positives": 0,
+                    "false_positives_cto": 0,
+                    "false_negatives_missed": 0,
+                    "true_negatives": 0
+                }
+            }
+
     def close(self) -> None:
         """Close connection."""
         self._conn.close()
+

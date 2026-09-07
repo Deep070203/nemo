@@ -91,6 +91,57 @@
     viewSurvival: document.getElementById('viewSurvival'),
     tradeTapeContainer: document.getElementById('tradeTapeContainer'),
     hazardRatiosList: document.getElementById('hazardRatiosList'),
+
+    // Top View Mode Switcher
+    btnViewLiveStream: document.getElementById('btnViewLiveStream'),
+    btnViewCohorts: document.getElementById('btnViewCohorts'),
+    streamDashboardView: document.getElementById('streamDashboardView'),
+    cohortDashboardView: document.getElementById('cohortDashboardView'),
+    cohortPendingBadge: document.getElementById('cohortPendingBadge'),
+
+    // Cohort Summary & Actions
+    statCohortTotal: document.getElementById('statCohortTotal'),
+    statCohortRugs: document.getElementById('statCohortRugs'),
+    statCohortSurvivors: document.getElementById('statCohortSurvivors'),
+    statCohortReaudit: document.getElementById('statCohortReaudit'),
+    statCohortGraduated: document.getElementById('statCohortGraduated'),
+    statCohortCTO: document.getElementById('statCohortCTO'),
+    statCohortPrecision: document.getElementById('statCohortPrecision'),
+    btnRunCohortBatch: document.getElementById('btnRunCohortBatch'),
+    btnReloadRugPrices: document.getElementById('btnReloadRugPrices'),
+    btnReloadRugPricesInner: document.getElementById('btnReloadRugPricesInner'),
+    btnReloadSurvivorPrices: document.getElementById('btnReloadSurvivorPrices'),
+
+    // Cohort Tabs & Panes
+    tabBtnRugs: document.getElementById('tabBtnRugs'),
+    tabBtnSurvivors: document.getElementById('tabBtnSurvivors'),
+    tabBtnReaudit: document.getElementById('tabBtnReaudit'),
+    tabBtnLearning: document.getElementById('tabBtnLearning'),
+    countTabRugs: document.getElementById('countTabRugs'),
+    countTabSurvivors: document.getElementById('countTabSurvivors'),
+    countTabReaudit: document.getElementById('countTabReaudit'),
+    paneRugs: document.getElementById('paneRugs'),
+    paneSurvivors: document.getElementById('paneSurvivors'),
+    paneReaudit: document.getElementById('paneReaudit'),
+    paneLearning: document.getElementById('paneLearning'),
+
+    // Cohort Tables & Containers
+    rugsTableBody: document.getElementById('rugsTableBody'),
+    survivorsTableBody: document.getElementById('survivorsTableBody'),
+    reauditCardsContainer: document.getElementById('reauditCardsContainer'),
+    rugsAlertBanner: document.getElementById('rugsAlertBanner'),
+
+    // Learning Elements
+    matrixTP: document.getElementById('matrixTP'),
+    matrixFP: document.getElementById('matrixFP'),
+    matrixFN: document.getElementById('matrixFN'),
+    matrixTN: document.getElementById('matrixTN'),
+    lblAccuracy: document.getElementById('lblAccuracy'),
+    lblPrecision: document.getElementById('lblPrecision'),
+    lblRecall: document.getElementById('lblRecall'),
+    ruleAttributionBody: document.getElementById('ruleAttributionBody'),
+    topFPTableBody: document.getElementById('topFPTableBody'),
+    topFNTableBody: document.getElementById('topFNTableBody'),
   };
 
   // Initialize
@@ -440,38 +491,38 @@
     }
 
     // Machine Learning & Survival Prediction Card
-    if (mlInfo || survivalInfo) {
-      dom.mlPredictionCard.style.display = 'block';
-      if (mlInfo) {
-        dom.mlRugProb.textContent = `${mlInfo.rug_probability}%`;
-        dom.mlRiskTier.textContent = mlInfo.risk_tier;
-        dom.mlRiskTier.className = `ml-val tier-tag ${mlInfo.risk_tier.toLowerCase()}`;
-        dom.mlVerdictTag.textContent = mlInfo.verdict;
-        dom.mlVerdictTag.className = `ml-verdict-tag ${mlInfo.predicted_label === 1 ? 'rug' : ''}`;
-      } else {
-        dom.mlRugProb.textContent = 'N/A';
-        dom.mlRiskTier.textContent = tier;
-        dom.mlVerdictTag.textContent = tier === 'CRITICAL' || tier === 'HIGH' ? 'RUG RISK' : 'VIABLE';
-      }
+    if (dom.mlPredictionCard) {
+      if (mlInfo || survivalInfo) {
+        dom.mlPredictionCard.style.display = 'block';
+        if (mlInfo) {
+          dom.mlRugProb.textContent = `${mlInfo.rug_probability}%`;
+          dom.mlRiskTier.textContent = mlInfo.risk_tier;
+          dom.mlRiskTier.className = `ml-val tier-tag ${mlInfo.risk_tier.toLowerCase()}`;
+          dom.mlVerdictTag.textContent = mlInfo.verdict;
+          dom.mlVerdictTag.className = `ml-verdict-tag ${mlInfo.predicted_label === 1 ? 'rug' : ''}`;
+        } else {
+          dom.mlRugProb.textContent = 'N/A';
+          dom.mlRiskTier.textContent = tier;
+          dom.mlVerdictTag.textContent = tier === 'CRITICAL' || tier === 'HIGH' ? 'RUG RISK' : 'VIABLE';
+        }
 
-      if (survivalInfo) {
-        dom.mlHazardMult.textContent = `${survivalInfo.hazard_multiplier}x`;
-        dom.mlHazardInterp.textContent = survivalInfo.interpretation;
-      } else {
-        dom.mlHazardMult.textContent = '1.00x';
-        dom.mlHazardInterp.textContent = 'Baseline cohort dynamics';
-      }
+        if (survivalInfo) {
+          dom.mlHazardMult.textContent = `${survivalInfo.hazard_multiplier}x`;
+          dom.mlHazardInterp.textContent = survivalInfo.interpretation;
+        } else {
+          dom.mlHazardMult.textContent = '1.00x';
+          dom.mlHazardInterp.textContent = 'Baseline cohort dynamics';
+        }
 
-      if (features) {
-        dom.mlFeaturesRow.innerHTML = Object.entries(features).map(([k, v]) => {
-          const isFlag = (k === 'dev_buy_supply_pct' && v > 10) || (k === 'vpin_score' && v > 0.4) || (k === 'is_jito_mev' && v === 1);
-          return `<span class="ml-feat-chip ${isFlag ? 'flagged' : ''}">${k}: <strong>${typeof v === 'number' ? v.toFixed(3) : v}</strong></span>`;
-        }).join('');
+        if (features && dom.mlFeaturesRow) {
+          dom.mlFeaturesRow.innerHTML = Object.entries(features).map(([k, v]) => {
+            const isFlag = (k === 'dev_buy_supply_pct' && v > 10) || (k === 'vpin_score' && v > 0.4) || (k === 'is_jito_mev' && v === 1);
+            return `<span class="ml-feat-chip ${isFlag ? 'flagged' : ''}">${k}: <strong>${typeof v === 'number' ? v.toFixed(3) : v}</strong></span>`;
+          }).join('');
+        }
       } else {
-        dom.mlFeaturesRow.innerHTML = '';
+        dom.mlPredictionCard.style.display = 'none';
       }
-    } else {
-      dom.mlPredictionCard.style.display = 'none';
     }
   }
 
@@ -526,7 +577,7 @@
       const data = await res.json();
 
       if (data.status === 'insufficient_data') {
-        dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Insufficient token records (${data.count} found). Need >= 5 tokens to fit Cox model.</span></div>`;
+        dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Insufficient token records (${data.count} found). Need >= 5 tokens to fit Cox model.</span></div>';
         return;
       }
 
@@ -544,7 +595,7 @@
         }).join('');
       }
     } catch (err) {
-      dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Error loading survival data: ${err.message}</span></div>`;
+      dom.hazardRatiosList.innerHTML = `<div class="loading-state"><span>Error loading survival data: ${err.message}</span></div>';
     }
   }
 
@@ -630,9 +681,42 @@
       fetchSurvivalModel();
     });
 
+    // Survival View Button in Header
     dom.btnViewSurvival.addEventListener('click', () => {
       dom.tabSurvival.click();
     });
+
+    // Top View Mode Switcher
+    if (dom.btnViewLiveStream && dom.btnViewCohorts) {
+      dom.btnViewLiveStream.addEventListener('click', () => switchViewMode('stream'));
+      dom.btnViewCohorts.addEventListener('click', () => switchViewMode('cohorts'));
+    }
+
+    // Cohort Tabs Switcher
+    const cohortTabBtns = [dom.tabBtnRugs, dom.tabBtnSurvivors, dom.tabBtnReaudit, dom.tabBtnLearning];
+    cohortTabBtns.forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        cohortTabBtns.forEach(b => b && b.classList.remove('active'));
+        btn.classList.add('active');
+        const bucket = btn.getAttribute('data-bucket');
+        switchCohortBucketTab(bucket);
+      });
+    });
+
+    // Batch Audit & Price Reload Handlers
+    if (dom.btnRunCohortBatch) {
+      dom.btnRunCohortBatch.addEventListener('click', runCohortBatchAudit);
+    }
+    if (dom.btnReloadRugPrices) {
+      dom.btnReloadRugPrices.addEventListener('click', () => reloadCohortPrices('rugs'));
+    }
+    if (dom.btnReloadRugPricesInner) {
+      dom.btnReloadRugPricesInner.addEventListener('click', () => reloadCohortPrices('rugs'));
+    }
+    if (dom.btnReloadSurvivorPrices) {
+      dom.btnReloadSurvivorPrices.addEventListener('click', () => reloadCohortPrices('survivors'));
+    }
 
     // =======================================================================
     // Universal Coin Inspector Search Listeners
@@ -732,7 +816,408 @@
     }
   }
 
+  // =========================================================================
+  // Cohort Audit & Active Learning Controller
+  // =========================================================================
+  let activeCohortBucket = 'rugs';
+
+  function switchViewMode(mode) {
+    if (mode === 'stream') {
+      dom.btnViewLiveStream.classList.add('active');
+      dom.btnViewCohorts.classList.remove('active');
+      dom.streamDashboardView.style.display = 'grid';
+      dom.cohortDashboardView.style.display = 'none';
+    } else {
+      dom.btnViewLiveStream.classList.remove('active');
+      dom.btnViewCohorts.classList.add('active');
+      dom.streamDashboardView.style.display = 'none';
+      dom.cohortDashboardView.style.display = 'flex';
+      fetchCohortSummary();
+      switchCohortBucketTab(activeCohortBucket);
+    }
+  }
+
+  async function fetchCohortSummary() {
+    try {
+      const res = await fetch('/api/cohorts/summary');
+      const data = await res.json();
+
+      if (dom.statCohortTotal) dom.statCohortTotal.textContent = data.total_audits || 0;
+      if (dom.statCohortRugs) dom.statCohortRugs.textContent = data.confirmed_rugs || 0;
+      if (dom.statCohortSurvivors) dom.statCohortSurvivors.textContent = data.surviving_candidates || 0;
+      if (dom.statCohortReaudit) dom.statCohortReaudit.textContent = data.pending_t2_reaudit || 0;
+      if (dom.statCohortGraduated) dom.statCohortGraduated.textContent = data.graduated_runners || 0;
+      if (dom.statCohortCTO) dom.statCohortCTO.textContent = data.cto_takeovers || 0;
+      if (dom.cohortPendingBadge) dom.cohortPendingBadge.textContent = data.pending_t1_audit || 0;
+
+      if (dom.countTabRugs) dom.countTabRugs.textContent = data.confirmed_rugs || 0;
+      if (dom.countTabSurvivors) dom.countTabSurvivors.textContent = data.surviving_candidates || 0;
+      if (dom.countTabReaudit) dom.countTabReaudit.textContent = data.pending_t2_reaudit || 0;
+
+      const lm = data.learning_metrics || {};
+      if (dom.statCohortPrecision) {
+        dom.statCohortPrecision.textContent = `${lm.precision_pct || 0}%`;
+      }
+    } catch (e) {
+      console.debug('Cohort summary fetch failed:', e);
+    }
+  }
+
+  function switchCohortBucketTab(bucket) {
+    activeCohortBucket = bucket;
+    [dom.paneRugs, dom.paneSurvivors, dom.paneReaudit, dom.paneLearning].forEach(p => {
+      if (p) p.style.display = 'none';
+    });
+
+    if (bucket === 'rugs') {
+      dom.paneRugs.style.display = 'flex';
+      loadBucketRugs();
+    } else if (bucket === 'survivors') {
+      dom.paneSurvivors.style.display = 'flex';
+      loadBucketSurvivors();
+    } else if (bucket === 'reaudit') {
+      dom.paneReaudit.style.display = 'flex';
+      loadBucketReaudit();
+    } else if (bucket === 'learning') {
+      dom.paneLearning.style.display = 'flex';
+      loadLearningMetrics();
+    }
+  }
+
+  async function loadBucketRugs() {
+    if (!dom.rugsTableBody) return;
+    dom.rugsTableBody.innerHTML = '<tr><td colspan="9" class="td-loading">Fetching Rug Graveyard via DuckDB...</td></tr>';
+    try {
+      const res = await fetch('/api/cohorts/bucket/rugs?limit=50');
+      const data = await res.json();
+      const tokens = data.tokens || [];
+
+      if (tokens.length === 0) {
+        dom.rugsTableBody.innerHTML = '<tr><td colspan="9" class="td-empty">No tokens in Rug Graveyard yet. Click "Run Batch Audit" to classify older coins!</td></tr>';
+        return;
+      }
+
+      dom.rugsTableBody.innerHTML = tokens.map(t => {
+        const pChange = (t.price_change_24h || 0);
+        const changeClass = pChange >= 0 ? 'val-pos' : 'val-neg';
+        const tierClass = (t.initial_risk_tier || 'LOW').toLowerCase();
+        const mcapStr = t.current_mcap_usd > 0 ? `$${Math.round(t.current_mcap_usd).toLocaleString()}` : '$0';
+        const volStr = t.volume_24h > 0 ? `$${Math.round(t.volume_24h).toLocaleString()}` : '$0';
+        const priceStr = t.current_price_usd > 0 ? `$${t.current_price_usd.toFixed(8)}` : '$0.00';
+
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(t.name || 'Unknown')}</strong>
+              <div class="sub-dim">${escapeHtml(t.symbol || 'SOL')}</div>
+            </td>
+            <td>
+              <code class="val-mono" title="${t.mint}">${t.mint.slice(0, 6)}...${t.mint.slice(-4)}</code>
+            </td>
+            <td>
+              <span class="badge-tag ${tierClass}">${t.initial_risk_tier || 'LOW'} (${t.initial_risk_score || 0})</span>
+            </td>
+            <td style="max-width: 260px;">
+              <small class="dim-text">${escapeHtml(t.audit_notes || 'Confirmed collapse')}</small>
+            </td>
+            <td class="val-mono">${priceStr}</td>
+            <td class="val-mono font-bold">${mcapStr}</td>
+            <td class="val-mono">${volStr}</td>
+            <td class="${changeClass} font-bold">${pChange >= 0 ? '+' : ''}${pChange.toFixed(1)}%</td>
+            <td>
+              <button class="btn-sm btn-secondary" onclick="auditSingleFromCohort('${t.mint}')">🔬 Audit</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      dom.rugsTableBody.innerHTML = `<tr><td colspan="9" class="td-empty">Error loading rugs: ${err.message}</td></tr>`;
+    }
+  }
+
+  async function loadBucketSurvivors() {
+    if (!dom.survivorsTableBody) return;
+    dom.survivorsTableBody.innerHTML = '<tr><td colspan="9" class="td-loading">Fetching Surviving Candidates...</td></tr>';
+    try {
+      const res = await fetch('/api/cohorts/bucket/survivors?limit=50');
+      const data = await res.json();
+      const tokens = data.tokens || [];
+
+      if (tokens.length === 0) {
+        dom.survivorsTableBody.innerHTML = '<tr><td colspan="9" class="td-empty">No surviving candidates found yet.</td></tr>';
+        return;
+      }
+
+      dom.survivorsTableBody.innerHTML = tokens.map(t => {
+        const pChange = (t.price_change_24h || 0);
+        const changeClass = pChange >= 0 ? 'val-pos' : 'val-neg';
+        const mcapStr = t.current_mcap_usd > 0 ? `$${Math.round(t.current_mcap_usd).toLocaleString()}` : '$0';
+        const volStr = t.volume_24h > 0 ? `$${Math.round(t.volume_24h).toLocaleString()}` : '$0';
+        const isGrad = t.is_graduated || t.status === 'GRADUATED';
+        const statusBadge = t.status === 'CTO' 
+          ? '<span class="badge-tag cto">🤝 CTO TAKEOVER</span>'
+          : (isGrad ? '<span class="badge-tag graduated">🚀 GRADUATED</span>' : '<span class="badge-tag low">🛡️ ACTIVE</span>');
+
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(t.name || 'Unknown')}</strong>
+              <div class="sub-dim">${escapeHtml(t.symbol || 'SOL')}</div>
+            </td>
+            <td>
+              <code class="val-mono" title="${t.mint}">${t.mint.slice(0, 6)}...${t.mint.slice(-4)}</code>
+            </td>
+            <td>${statusBadge}</td>
+            <td class="val-mono font-bold">${mcapStr}</td>
+            <td class="val-mono">${volStr}</td>
+            <td class="${changeClass} font-bold">${pChange >= 0 ? '+' : ''}${pChange.toFixed(1)}%</td>
+            <td>${isGrad ? '✅ Migrated' : '⏳ Bonding Curve'}</td>
+            <td style="max-width: 240px;">
+              <small class="dim-text">${escapeHtml(t.audit_notes || 'Maintains liquidity floor')}</small>
+            </td>
+            <td>
+              <button class="btn-sm btn-primary" onclick="auditSingleFromCohort('${t.mint}')">🔬 Inspect</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      dom.survivorsTableBody.innerHTML = `<tr><td colspan="9" class="td-empty">Error loading survivors: ${err.message}</td></tr>`;
+    }
+  }
+
+  async function loadBucketReaudit() {
+    if (!dom.reauditCardsContainer) return;
+    dom.reauditCardsContainer.innerHTML = '<div class="loading-state"><div class="spinner"></div><span>Loading tokens for long-term re-audit...</span></div>';
+    try {
+      const res = await fetch('/api/cohorts/bucket/reaudit?limit=30');
+      const data = await res.json();
+      const tokens = data.tokens || [];
+
+      if (tokens.length === 0) {
+        dom.reauditCardsContainer.innerHTML = `
+          <div class="inspector-placeholder" style="grid-column: 1 / -1; padding: 40px 20px;">
+            <div class="placeholder-icon">🎉</div>
+            <h3>All Multi-Day Cohorts Reviewed!</h3>
+            <p>No tokens currently pending human re-audit. As tokens age past 3 days, they will automatically populate here for ground-truth verification.</p>
+          </div>
+        `;
+        return;
+      }
+
+      dom.reauditCardsContainer.innerHTML = tokens.map(t => {
+        const mcapStr = t.current_mcap_usd > 0 ? `$${Math.round(t.current_mcap_usd).toLocaleString()}` : '$0';
+        const volStr = t.volume_24h > 0 ? `$${Math.round(t.volume_24h).toLocaleString()}` : '$0';
+
+        return `
+          <div class="reaudit-card" id="cardReaudit_${t.mint}">
+            <div class="reaudit-card-header">
+              <div class="reaudit-title-group">
+                <h4>${escapeHtml(t.name || 'Token')} (${escapeHtml(t.symbol || 'SOL')})</h4>
+                <code class="val-mono">${t.mint.slice(0, 8)}...${t.mint.slice(-6)}</code>
+              </div>
+              <span class="badge-tag ${t.initial_risk_tier.toLowerCase()}">Initial: ${t.initial_risk_tier}</span>
+            </div>
+
+            <div class="reaudit-metrics-grid">
+              <div class="reaudit-metric-item">
+                <span class="lbl">Mcap</span>
+                <span class="val">${mcapStr}</span>
+              </div>
+              <div class="reaudit-metric-item">
+                <span class="lbl">24h Vol</span>
+                <span class="val">${volStr}</span>
+              </div>
+              <div class="reaudit-metric-item">
+                <span class="lbl">Stage 1 Note</span>
+                <span class="val" style="font-size: 10px; font-weight: normal;">${escapeHtml((t.audit_notes || '').slice(0, 28))}...</span>
+              </div>
+            </div>
+
+            <div class="reaudit-actions-strip">
+              <span class="lbl" style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Submit Ground-Truth Re-Audit Verdict:</span>
+              <div class="reaudit-btn-group">
+                <button class="btn-verdict rug" onclick="submitReauditVerdict('${t.mint}', 'SLOW_RUG')">💀 Confirm Slow Rug</button>
+                <button class="btn-verdict grad" onclick="submitReauditVerdict('${t.mint}', 'GRADUATED')">🚀 Graduated / Mooner</button>
+                <button class="btn-verdict cto" onclick="submitReauditVerdict('${t.mint}', 'CTO')">🤝 Mark CTO</button>
+              </div>
+              <textarea class="reaudit-notes-input" id="notes_${t.mint}" rows="2" placeholder="Optional learning notes (e.g. dev split wallets, community took over Telegram...)"></textarea>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      dom.reauditCardsContainer.innerHTML = `<div class="error-msg">Error: ${err.message}</div>`;
+    }
+  }
+
+  async function loadLearningMetrics() {
+    try {
+      const res = await fetch('/api/cohorts/learning-metrics');
+      const data = await res.json();
+      const lm = data.learning_metrics || {};
+
+      if (dom.matrixTP) dom.matrixTP.textContent = lm.true_positives || 0;
+      if (dom.matrixFP) dom.matrixFP.textContent = lm.false_positives_cto || 0;
+      if (dom.matrixFN) dom.matrixFN.textContent = lm.false_negatives_missed || 0;
+      if (dom.matrixTN) dom.matrixTN.textContent = lm.true_negatives || 0;
+
+      if (dom.lblAccuracy) dom.lblAccuracy.textContent = `${lm.accuracy_pct || 0}%`;
+      if (dom.lblPrecision) dom.lblPrecision.textContent = `${lm.precision_pct || 0}%`;
+      if (dom.lblRecall) dom.lblRecall.textContent = `${lm.recall_pct || 0}%`;
+
+      // Render Rule Attribution Table
+      if (dom.ruleAttributionBody) {
+        const rules = data.rule_attribution || [];
+        if (rules.length === 0) {
+          dom.ruleAttributionBody.innerHTML = '<tr><td colspan="5" class="td-empty">No rule attribution data yet. Run batch audits to benchmark forensic flags!</td></tr>';
+        } else {
+          dom.ruleAttributionBody.innerHTML = rules.map(r => `
+            <tr>
+              <td><strong>${escapeHtml(r.flag)}</strong></td>
+              <td class="val-mono">${r.total_triggers}</td>
+              <td class="val-mono val-neg">${r.actual_rugs}</td>
+              <td class="val-mono val-pos">${r.false_alarms}</td>
+              <td class="val-mono font-bold" style="color: ${r.precision_pct >= 85 ? '#10b981' : '#f59e0b'};">
+                ${r.precision_pct}%
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+
+      // Render Top False Positives (CTOs)
+      if (dom.topFPTableBody) {
+        const fps = data.top_false_positives || [];
+        if (fps.length === 0) {
+          dom.topFPTableBody.innerHTML = '<tr><td colspan="4" class="td-empty">No False Positives recorded yet.</td></tr>';
+        } else {
+          dom.topFPTableBody.innerHTML = fps.map(f => `
+            <tr>
+              <td><strong>${escapeHtml(f.symbol || 'SOL')}</strong> <small class="dim-text">${f.mint.slice(0, 6)}...</small></td>
+              <td class="val-mono font-bold">$${Math.round(f.current_mcap_usd || 0).toLocaleString()}</td>
+              <td class="val-mono">$${Math.round(f.volume_24h || 0).toLocaleString()}</td>
+              <td><small>${escapeHtml(f.audit_notes || f.human_notes || 'Flagged high risk, community revived')}</small></td>
+            </tr>
+          `).join('');
+        }
+      }
+
+      // Render Top False Negatives (Missed slow rugs)
+      if (dom.topFNTableBody) {
+        const fns = data.top_false_negatives || [];
+        if (fns.length === 0) {
+          dom.topFNTableBody.innerHTML = '<tr><td colspan="4" class="td-empty">No False Negatives recorded yet.</td></tr>';
+        } else {
+          dom.topFNTableBody.innerHTML = fns.map(f => `
+            <tr>
+              <td><strong>${escapeHtml(f.symbol || 'SOL')}</strong> <small class="dim-text">${f.mint.slice(0, 6)}...</small></td>
+              <td class="val-mono font-bold">$${Math.round(f.current_mcap_usd || 0).toLocaleString()}</td>
+              <td class="val-mono">$${Math.round(f.volume_24h || 0).toLocaleString()}</td>
+              <td><small>${escapeHtml(f.audit_notes || f.human_notes || 'Predicted clean, soft-rugged later')}</small></td>
+            </tr>
+          `).join('');
+        }
+      }
+
+    } catch (e) {
+      console.debug('Failed to load learning metrics:', e);
+    }
+  }
+
+  async function runCohortBatchAudit() {
+    if (dom.btnRunCohortBatch) {
+      dom.btnRunCohortBatch.disabled = true;
+      dom.btnRunCohortBatch.innerHTML = '<span>⏳</span> Auditing T+10h Coins...';
+    }
+    try {
+      const res = await fetch('/api/cohorts/audit-batch?hours_threshold=10.0&limit=60', { method: 'POST' });
+      const data = await res.json();
+      alert(`Batch Audit Complete!\n\nProcessed: ${data.processed || 0} tokens\n💀 New Rugs: ${data.new_rugs || 0}\n🛡️ New Survivors: ${data.new_survivors || 0}`);
+      fetchCohortSummary();
+      switchCohortBucketTab(activeCohortBucket);
+    } catch (err) {
+      alert('Batch audit error: ' + err.message);
+    } finally {
+      if (dom.btnRunCohortBatch) {
+        dom.btnRunCohortBatch.disabled = false;
+        dom.btnRunCohortBatch.innerHTML = '<span>⚡</span> Run Batch Audit (T+10h)';
+      }
+    }
+  }
+
+  async function reloadCohortPrices(bucket = 'rugs') {
+    const btn = bucket === 'rugs' ? dom.btnReloadRugPrices : dom.btnReloadSurvivorPrices;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span> Reloading DexScreener Prices...';
+    }
+    try {
+      const res = await fetch('/api/cohorts/refresh-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket, limit: 60 })
+      });
+      const data = await res.json();
+
+      if (data.revived_count > 0 && dom.rugsAlertBanner) {
+        dom.rugsAlertBanner.style.display = 'block';
+        dom.rugsAlertBanner.innerHTML = `
+          ⚡ <strong>${data.revived_count} REVIVED CTO TOKEN(S) DETECTED!</strong><br>
+          ${data.revived_tokens.map(r => `• <strong>${escapeHtml(r.symbol || 'Token')}</strong>: Mcap surged to $${Math.round(r.mcap).toLocaleString()} ($${Math.round(r.volume_24h).toLocaleString()} 24h vol)`).join('<br>')}
+        `;
+      }
+
+      fetchCohortSummary();
+      switchCohortBucketTab(activeCohortBucket);
+    } catch (err) {
+      alert('Price reload error: ' + err.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>🔄</span> Reload ${bucket === 'rugs' ? 'Rug' : 'Survivor'} Prices`;
+      }
+    }
+  }
+
+  // Global helper functions attached to window for table/card inline clicks
+  window.auditSingleFromCohort = function(mint) {
+    switchViewMode('stream');
+    if (dom.inspectCoinInput) dom.inspectCoinInput.value = mint;
+    inspectAddress(mint);
+  };
+
+  window.submitReauditVerdict = async function(mint, verdict) {
+    const notesElem = document.getElementById(`notes_${mint}`);
+    const notes = notesElem ? notesElem.value.trim() : '';
+
+    try {
+      const res = await fetch(`/api/cohorts/human-audit/${mint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verdict, notes })
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        const card = document.getElementById(`cardReaudit_${mint}`);
+        if (card) {
+          card.style.opacity = '0.5';
+          card.innerHTML = `<div style="text-align: center; padding: 20px; color: #10b981;">✅ Recorded Verdict: <strong>${verdict}</strong>. Model updated!</div>`;
+          setTimeout(() => card.remove(), 1800);
+        }
+        fetchCohortSummary();
+      }
+    } catch (e) {
+      alert('Failed to save verdict: ' + e.message);
+    }
+  };
+
   // Run app on DOM ready
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => {
+    init();
+    fetchCohortSummary();
+  });
 
 })();
+

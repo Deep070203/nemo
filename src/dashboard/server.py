@@ -22,6 +22,8 @@ from src.ingestion.models import TokenCreatedEvent, TokenTradeEvent
 from src.ingestion.pumpdev_client import PumpDevWebSocketClient
 from src.ingestion.rpc_client import SolanaRPCClient
 from src.forensics.engine import ForensicsEngine, TokenForensicReport
+from src.forensics.cohort_auditor import CohortAuditor
+from src.forensics.cohort_worker import CohortAuditWorker
 from src.models.dataset_builder import DatasetBuilder
 from src.models.survival_model import SurvivalAnalysisEngine
 from src.models.classifier import RugPullClassifier
@@ -82,6 +84,10 @@ pumpdev_client = PumpDevWebSocketClient(settings.websocket)
 recent_tokens: List[Dict[str, Any]] = []
 recent_trades: List[Dict[str, Any]] = []
 recent_reports: Dict[str, Dict[str, Any]] = {}
+
+# Cohort Batch Auditor & Background Worker
+cohort_auditor = CohortAuditor(storage, rpc_client)
+cohort_worker = CohortAuditWorker(storage, rpc_client, interval_seconds=600.0, hours_threshold=10.0)
 
 
 async def on_new_token(event: TokenCreatedEvent):
@@ -150,17 +156,19 @@ async def on_new_trade(event: TokenTradeEvent):
 
 @app.on_event("startup")
 async def startup_event():
-    """Start ingestion client and DuckDB worker."""
+    """Start ingestion client, DuckDB worker, and automated cohort audit worker."""
     await storage.start()
     pumpdev_client.on_token_created(on_new_token)
     pumpdev_client.on_token_trade(on_new_trade)
     await pumpdev_client.start()
-    logger.info("Nemo Production Dashboard server started.")
+    await cohort_worker.start()
+    logger.info("Nemo Production Dashboard server & Cohort Worker started.")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup resources."""
+    await cohort_worker.stop()
     await pumpdev_client.stop()
     await storage.stop()
     await rpc_client.close()
@@ -450,6 +458,70 @@ async def inspect_coin(payload: Dict[str, Any]):
         "classifier": ml_info,
         "trades_count": len(trades_df)
     }
+
+
+# ==========================================
+# Cohort Batch Audit & Active Learning APIs
+# ==========================================
+
+@app.get("/api/cohorts/summary")
+async def get_cohort_summary():
+    """Get aggregated metrics and counts for the cohort buckets."""
+    return storage.get_cohort_summary_stats()
+
+
+@app.get("/api/cohorts/bucket/{bucket}")
+async def get_cohort_bucket(bucket: str, limit: int = 60, offset: int = 0):
+    """Fetch tokens from a specific bucket: 'rugs', 'survivors', 'reaudit', or 'all'."""
+    tokens = storage.get_audit_bucket(bucket=bucket, limit=limit, offset=offset)
+    return {
+        "bucket": bucket,
+        "count": len(tokens),
+        "tokens": tokens
+    }
+
+
+@app.post("/api/cohorts/audit-batch")
+async def trigger_cohort_audit(hours_threshold: float = 10.0, limit: int = 60):
+    """Manually trigger a batch audit for tokens older than hours_threshold."""
+    res = await cohort_auditor.audit_batch_t1(hours_threshold=hours_threshold, limit=limit)
+    return res
+
+
+@app.post("/api/cohorts/refresh-prices")
+async def refresh_cohort_prices(payload: Optional[Dict[str, Any]] = None):
+    """Batch reload current prices via DexScreener for a bucket (default 'rugs')."""
+    bucket = "rugs"
+    limit = 60
+    if payload:
+        bucket = payload.get("bucket", "rugs")
+        limit = int(payload.get("limit", 60))
+
+    res = await cohort_auditor.refresh_bucket_prices(bucket=bucket, limit=limit)
+    return res
+
+
+@app.post("/api/cohorts/human-audit/{mint}")
+async def record_human_audit_verdict(mint: str, payload: Dict[str, Any]):
+    """Submit human review/ground-truth verdict (e.g. CONFIRMED_RUG, GRADUATED, CTO, SLOW_RUG)."""
+    verdict = payload.get("verdict")
+    if not verdict:
+        raise HTTPException(status_code=400, detail="Verdict is required")
+
+    notes = payload.get("notes", "")
+    ok = storage.record_human_audit(mint=mint, verdict=verdict, notes=notes)
+    return {
+        "status": "success",
+        "mint": mint,
+        "verdict": verdict.upper(),
+        "notes": notes
+    }
+
+
+@app.get("/api/cohorts/learning-metrics")
+async def get_learning_metrics():
+    """Get detailed model feedback, confusion matrix, and rule attribution."""
+    return cohort_auditor.get_detailed_learning_metrics()
 
 
 @app.websocket("/ws/live")

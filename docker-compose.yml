@@ -1,0 +1,21 @@
+services:
+  nemo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nemo-forensics
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist DuckDB databases across container rebuilds and host reboots
+      - ./data:/app/data
+      # Mount configuration for easy live threshold tuning
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"

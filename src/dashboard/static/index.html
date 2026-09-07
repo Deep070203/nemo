@@ -83,8 +83,19 @@
       </div>
     </div>
 
-    <!-- Main Multi-Column HUD Layout -->
-    <main class="dashboard-grid">
+    <!-- Top Mode View Navigation Switcher -->
+    <nav class="view-mode-nav">
+      <button class="view-nav-btn active" id="btnViewLiveStream">
+        <span class="nav-icon">⚡</span> REAL-TIME FORENSIC STREAM
+      </button>
+      <button class="view-nav-btn" id="btnViewCohorts">
+        <span class="nav-icon">🗂️</span> COHORT AUDIT & LEARNING HUD
+        <span class="badge-pill" id="cohortPendingBadge">0</span>
+      </button>
+    </nav>
+
+    <!-- Main Multi-Column HUD Layout (Stream View) -->
+    <main class="dashboard-grid" id="streamDashboardView">
       
       <!-- LEFT COLUMN: Live Token Ingestion Stream -->
       <section class="panel panel-left" aria-labelledby="tokensFeedHeading">
@@ -339,6 +350,268 @@
           </div>
         </div>
       </section>
+
+    </main>
+
+    <!-- COHORT AUDIT & DELAYED LEARNING HUD VIEW -->
+    <main class="cohort-dashboard-view" id="cohortDashboardView" style="display: none;">
+      
+      <!-- Cohort Summary Stats Strip -->
+      <section class="cohort-summary-bar">
+        <div class="cohort-stat-group">
+          <div class="stat-card" id="cardCohortTotal">
+            <span class="stat-label">TOTAL AUDITED</span>
+            <span class="stat-value" id="statCohortTotal">0</span>
+          </div>
+          <div class="stat-card danger" id="cardCohortRugs">
+            <span class="stat-label">💀 RUG GRAVEYARD</span>
+            <span class="stat-value" id="statCohortRugs">0</span>
+          </div>
+          <div class="stat-card success" id="cardCohortSurvivors">
+            <span class="stat-label">🛡️ SURVIVING (T+10H)</span>
+            <span class="stat-value" id="statCohortSurvivors">0</span>
+          </div>
+          <div class="stat-card warning" id="cardCohortReaudit">
+            <span class="stat-label">🔍 RE-AUDIT DUE (3-10D)</span>
+            <span class="stat-value" id="statCohortReaudit">0</span>
+          </div>
+          <div class="stat-card info" id="cardCohortGraduated">
+            <span class="stat-label">🚀 GRADUATED / RAYDIUM</span>
+            <span class="stat-value" id="statCohortGraduated">0</span>
+          </div>
+          <div class="stat-card cto" id="cardCohortCTO">
+            <span class="stat-label">🤝 CTO TAKEOVERS</span>
+            <span class="stat-value" id="statCohortCTO">0</span>
+          </div>
+          <div class="stat-card precision" id="cardCohortPrecision">
+            <span class="stat-label">🎯 MODEL PRECISION</span>
+            <span class="stat-value" id="statCohortPrecision">0.0%</span>
+          </div>
+        </div>
+
+        <div class="cohort-actions-group">
+          <button id="btnRunCohortBatch" class="btn btn-primary">
+            <span>⚡</span> Run Batch Audit (T+10h)
+          </button>
+          <button id="btnReloadRugPrices" class="btn btn-secondary">
+            <span>🔄</span> Reload Rug Prices
+          </button>
+        </div>
+      </section>
+
+      <!-- Cohort Navigation Tabs -->
+      <div class="cohort-tabs-nav">
+        <button class="cohort-tab-btn active" id="tabBtnRugs" data-bucket="rugs">
+          💀 Rug Graveyard (<span id="countTabRugs">0</span>)
+        </button>
+        <button class="cohort-tab-btn" id="tabBtnSurvivors" data-bucket="survivors">
+          🛡️ Surviving Candidates (<span id="countTabSurvivors">0</span>)
+        </button>
+        <button class="cohort-tab-btn" id="tabBtnReaudit" data-bucket="reaudit">
+          🔍 Multi-Day Re-Audit (<span id="countTabReaudit">0</span>)
+        </button>
+        <button class="cohort-tab-btn" id="tabBtnLearning" data-bucket="learning">
+          🧠 Active Learning & Model Feedback
+        </button>
+      </div>
+
+      <!-- Cohort Tab Panes -->
+      <div class="cohort-content-area">
+
+        <!-- PANE 1: RUG GRAVEYARD -->
+        <div class="cohort-pane active" id="paneRugs">
+          <div class="pane-header-strip">
+            <div class="pane-title-group">
+              <h3>💀 The Rug Graveyard (6–12h Audit Outcome)</h3>
+              <p>Tokens that experienced bonding curve collapse, liquidity drainage, or dev sellout within the initial 10 hours. Use the batch reload button to detect zombie resurrections or CTO takeovers.</p>
+            </div>
+            <button id="btnReloadRugPricesInner" class="btn btn-secondary btn-sm">🔄 Batch Reload DexScreener Prices</button>
+          </div>
+          <div id="rugsAlertBanner" class="revived-banner" style="display: none;"></div>
+          <div class="cohort-table-wrap">
+            <table class="cohort-table">
+              <thead>
+                <tr>
+                  <th>ASSET / SYMBOL</th>
+                  <th>SOLANA MINT</th>
+                  <th>INITIAL RISK</th>
+                  <th>AUDIT NOTES</th>
+                  <th>CURRENT PRICE</th>
+                  <th>MARKET CAP</th>
+                  <th>24H VOL</th>
+                  <th>24H CHANGE</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="rugsTableBody">
+                <tr><td colspan="9" class="td-loading">Loading Rug Graveyard records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PANE 2: SURVIVING CANDIDATES -->
+        <div class="cohort-pane" id="paneSurvivors" style="display: none;">
+          <div class="pane-header-strip">
+            <div class="pane-title-group">
+              <h3>🛡️ Surviving Candidates (Passed Stage 1 Audit)</h3>
+              <p>Tokens that sustained price floors, maintained active volume, or graduated to Raydium after 10 hours.</p>
+            </div>
+            <button id="btnReloadSurvivorPrices" class="btn btn-secondary btn-sm">🔄 Reload Survivor Prices</button>
+          </div>
+          <div class="cohort-table-wrap">
+            <table class="cohort-table">
+              <thead>
+                <tr>
+                  <th>ASSET / SYMBOL</th>
+                  <th>SOLANA MINT</th>
+                  <th>STATUS</th>
+                  <th>MARKET CAP</th>
+                  <th>24H VOL</th>
+                  <th>24H CHANGE</th>
+                  <th>RAYDIUM AMM</th>
+                  <th>STAGE 1 NOTES</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="survivorsTableBody">
+                <tr><td colspan="9" class="td-loading">Loading Surviving Candidates records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PANE 3: MULTI-DAY RE-AUDIT (HUMAN-IN-THE-LOOP) -->
+        <div class="cohort-pane" id="paneReaudit" style="display: none;">
+          <div class="pane-header-strip">
+            <div class="pane-title-group">
+              <h3>🔍 Long-Term Ground-Truth Re-Audit (3–10 Days)</h3>
+              <p>Review surviving candidates to identify <strong>Slow Insider Drains (False Negatives)</strong> vs <strong>Community Takeovers / Genuine Runners</strong>. Submitting verdicts actively refines Nemo's forensic algorithms.</p>
+            </div>
+          </div>
+          <div class="reaudit-cards-grid" id="reauditCardsContainer">
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <span>Awaiting tokens due for multi-day human re-audit...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 4: ACTIVE LEARNING & METRICS -->
+        <div class="cohort-pane" id="paneLearning" style="display: none;">
+          <div class="learning-grid">
+            
+            <!-- Confusion Matrix Box -->
+            <div class="learning-card">
+              <div class="card-header-simple">
+                <h4>🎯 Real-World Confusion Matrix (Predictions vs Reality)</h4>
+                <span class="badge badge-accent">GROUND TRUTH BENCHMARK</span>
+              </div>
+              <div class="confusion-matrix-widget">
+                <div class="matrix-cell tp">
+                  <span class="m-val" id="matrixTP">0</span>
+                  <span class="m-lbl">TRUE POSITIVES</span>
+                  <span class="m-sub">Predicted Rug & Rugged</span>
+                </div>
+                <div class="matrix-cell fp">
+                  <span class="m-val" id="matrixFP">0</span>
+                  <span class="m-lbl">FALSE POSITIVES (CTOs)</span>
+                  <span class="m-sub">Predicted Rug, but Survived!</span>
+                </div>
+                <div class="matrix-cell fn">
+                  <span class="m-val" id="matrixFN">0</span>
+                  <span class="m-lbl">FALSE NEGATIVES (Missed)</span>
+                  <span class="m-sub">Predicted Clean, but Slow-Rugged</span>
+                </div>
+                <div class="matrix-cell tn">
+                  <span class="m-val" id="matrixTN">0</span>
+                  <span class="m-lbl">TRUE NEGATIVES</span>
+                  <span class="m-sub">Predicted Clean & Survived</span>
+                </div>
+              </div>
+              <div class="matrix-summary-row">
+                <div><span>Empirical Accuracy:</span> <strong id="lblAccuracy">0.0%</strong></div>
+                <div><span>Precision (Positive Predictive Value):</span> <strong id="lblPrecision">0.0%</strong></div>
+                <div><span>Recall (Sensitivity):</span> <strong id="lblRecall">0.0%</strong></div>
+              </div>
+            </div>
+
+            <!-- Forensic Heuristic Attribution Ranking -->
+            <div class="learning-card">
+              <div class="card-header-simple">
+                <h4>🔬 Forensic Rule Attribution & Precision Ranking</h4>
+                <span class="badge badge-accent">EMPIRICAL ACCURACY</span>
+              </div>
+              <div class="rule-attribution-table-wrap">
+                <table class="cohort-table">
+                  <thead>
+                    <tr>
+                      <th>FORENSIC HEURISTIC</th>
+                      <th>TOTAL TRIGGERS</th>
+                      <th>CONFIRMED RUGS</th>
+                      <th>FALSE ALARMS</th>
+                      <th>RULE PRECISION</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ruleAttributionBody">
+                    <tr><td colspan="5" class="td-loading">Calculating heuristic precision...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- False Alarms vs Missed Rugs Breakdown Tables -->
+          <div class="error-breakdown-row">
+            <div class="learning-card">
+              <div class="card-header-simple">
+                <h4>🤝 Top False Alarms / CTOs (Predicted Rug, But Survived)</h4>
+              </div>
+              <p class="card-hint">Tokens flagged high-risk at Block 0 that succeeded anyway (e.g. community takeover or early dump bought up).</p>
+              <div class="cohort-table-wrap">
+                <table class="cohort-table">
+                  <thead>
+                    <tr>
+                      <th>TOKEN</th>
+                      <th>MARKET CAP</th>
+                      <th>24H VOL</th>
+                      <th>AUDIT OBSERVATIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="topFPTableBody">
+                    <tr><td colspan="4" class="td-empty">No False Positives recorded yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="learning-card">
+              <div class="card-header-simple">
+                <h4>⚠️ Missed Slow Rugs (Predicted Clean, But Collapsed)</h4>
+              </div>
+              <p class="card-hint">Tokens initially deemed low-risk that subsequently dumped or drained liquidity.</p>
+              <div class="cohort-table-wrap">
+                <table class="cohort-table">
+                  <thead>
+                    <tr>
+                      <th>TOKEN</th>
+                      <th>MARKET CAP</th>
+                      <th>24H VOL</th>
+                      <th>AUDIT OBSERVATIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="topFNTableBody">
+                    <tr><td colspan="4" class="td-empty">No False Negatives recorded yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
 
     </main>
   </div>
