@@ -7,6 +7,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import asyncio
 import json
 import logging
+import re
+import numpy as np
 from typing import Set, Dict, Any, List, Optional
 from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -22,6 +24,7 @@ from src.ingestion.rpc_client import SolanaRPCClient
 from src.forensics.engine import ForensicsEngine, TokenForensicReport
 from src.models.dataset_builder import DatasetBuilder
 from src.models.survival_model import SurvivalAnalysisEngine
+from src.models.classifier import RugPullClassifier
 
 logger = logging.getLogger("nemo.dashboard_server")
 logging.basicConfig(level=logging.INFO)
@@ -268,6 +271,184 @@ async def get_survival_analysis():
         "cohort_count": len(df),
         "kaplan_meier": km.model_dump(),
         "hazard_ratios": [r.model_dump() for r in hr_results]
+    }
+
+
+@app.post("/api/inspect")
+async def inspect_coin(payload: Dict[str, Any]):
+    """Inspect and audit any address: EVM cross-chain diagnostic or Solana ML & forensic audit."""
+    address = str(payload.get("address", "")).strip()
+    if not address:
+        raise HTTPException(status_code=400, detail="Address is required")
+
+    # 1. EVM Hex Address Check (e.g. 0x...)
+    if re.match(r"^0x[a-fA-F0-9]{40}$", address):
+        identified_asset = "Unknown EVM Asset"
+        network_name = "Robinhood Chain / Arbitrum Nitro EVM"
+        addr_lower = address.lower()
+        if "39dbed3a2bd333467115de45665cc57f813c4571" in addr_lower:
+            identified_asset = "Pons (PONS) Token"
+            network_name = "Robinhood Chain (Arbitrum Nitro Stack)"
+        elif "afa57c4c5a72d36530c8e816ad6e9a5947941536" in addr_lower:
+            identified_asset = "EVM Token"
+            network_name = "Robinhood Chain / EVM L2"
+
+        return {
+            "status": "evm_diagnostic",
+            "is_evm": True,
+            "address": address,
+            "address_type": "EVM Hex Contract Address (42 characters, '0x' prefix)",
+            "detected_network": network_name,
+            "identified_asset": identified_asset,
+            "message": "⚠️ NETWORK MISMATCH DETECTED: This is an EVM hex contract address. The Nemo Screener is configured for Solana Mainnet & Pump.fun bonding curve protocols (Base58 addresses).",
+            "explanation": "Solana RPC nodes reject EVM hex addresses as invalid Base58 encoding. To audit EVM tokens, an EVM JSON-RPC provider (such as Arbitrum or Robinhood Chain RPC) and Uniswap V2/V3 pair tracking are required.",
+            "solana_compatible": False
+        }
+
+    # 2. Solana Base58 Address Check
+    if not re.match(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$", address):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid address format '{address}'. Please provide a 32-44 character Solana Base58 mint or 42-char EVM 0x address."
+        )
+
+    mint = address
+
+    # Query local DuckDB
+    tok_df = storage._conn.execute("SELECT * FROM tokens WHERE mint = ?", [mint]).df()
+    trades_df = storage._conn.execute("SELECT * FROM trades WHERE mint || '' = ? ORDER BY timestamp ASC", [mint]).df()
+
+    creation_sig = None
+    metadata_uri = None
+    token_name = mint[:8] + "..."
+    token_symbol = "SOL-SPL"
+    creator = "Unknown / External"
+    dev_buy = 0.0
+    dev_sol = 0.0
+    on_chain_found = False
+
+    if not tok_df.empty:
+        r = tok_df.iloc[0]
+        token_name = r.get("name") or token_name
+        token_symbol = r.get("symbol") or token_symbol
+        creator = r.get("creator") or creator
+        creation_sig = r.get("signature")
+        metadata_uri = r.get("uri")
+        dev_buy = float(r.get("initial_buy") or 0.0)
+        dev_sol = float(r.get("sol_amount") or 0.0)
+        on_chain_found = True
+    else:
+        # Check on-chain via Solana RPC
+        try:
+            acc_info = await rpc_client.call("getAccountInfo", [mint, {"encoding": "jsonParsed"}])
+            if acc_info and acc_info.get("value"):
+                on_chain_found = True
+                sigs = await rpc_client.call("getSignaturesForAddress", [mint, {"limit": 10}])
+                if sigs and len(sigs) > 0:
+                    creation_sig = sigs[-1].get("signature")
+        except Exception as e:
+            logger.warning(f"On-chain lookup error for {mint}: {e}")
+
+    # Run full multi-modal forensic inspection
+    report = await forensics_engine.audit_token(
+        mint=mint,
+        creation_signature=creation_sig,
+        metadata_uri=metadata_uri,
+        token_name=token_name,
+        trades=trades_df.to_dict(orient="records") if not trades_df.empty else None
+    )
+    recent_reports[mint] = report.model_dump()
+
+    # Extract or build predictor vector
+    builder = DatasetBuilder(storage)
+    df_all = builder.build_dataset_from_storage()
+
+    feature_cols = [
+        "obs_trade_count",
+        "total_sol_vol",
+        "buy_vol_ratio",
+        "vpin_score",
+        "shannon_entropy",
+        "dev_buy_supply_pct",
+        "is_jito_mev",
+        "is_block0_cornered",
+    ]
+
+    token_feat = df_all[df_all["mint"] == mint] if not df_all.empty else None
+    if token_feat is not None and not token_feat.empty:
+        feat_dict = token_feat.iloc[0].to_dict()
+    else:
+        feat_dict = {
+            "obs_trade_count": len(trades_df),
+            "total_sol_vol": float(trades_df["sol_amount"].sum()) if not trades_df.empty else 0.0,
+            "buy_vol_ratio": 0.5,
+            "vpin_score": report.vpin_analysis.vpin_score if report.vpin_analysis else 0.0,
+            "shannon_entropy": report.entropy_analysis.shannon_entropy if report.entropy_analysis else 0.0,
+            "dev_buy_supply_pct": (dev_buy / 1_000_000_000.0) * 100.0,
+            "is_jito_mev": int(any("JITO" in f for f in report.all_flags)),
+            "is_block0_cornered": int(any("BLOCK0_SUPPLY_CORNERED" in f for f in report.all_flags)),
+        }
+
+    # Run Survival Model (Cox PH)
+    survival_info = None
+    if not df_all.empty and len(df_all) >= 5:
+        survival_engine = SurvivalAnalysisEngine()
+        durations = df_all["survival_minutes"].values
+        events = df_all["is_rug_pull"].values
+        hr_results = survival_engine.fit_cox_ph(df_all[feature_cols], durations, events)
+
+        total_log_hazard = 0.0
+        for r in hr_results:
+            f_val = feat_dict.get(r.feature_name, 0.0)
+            mean_val = float(df_all[r.feature_name].mean())
+            total_log_hazard += r.coef_beta * (f_val - mean_val)
+
+        hazard_multiplier = float(np.exp(np.clip(total_log_hazard, -10, 10)))
+        survival_info = {
+            "hazard_multiplier": round(hazard_multiplier, 2),
+            "is_elevated": hazard_multiplier > 1.5,
+            "cohort_size": len(df_all),
+            "interpretation": f"Collapses at {hazard_multiplier:.2f}x standard cohort rate" if hazard_multiplier > 1.5 else "Stable hazard rate within normal lifespan distribution"
+        }
+
+    # Run ML Supervised Classifier
+    ml_info = None
+    if not df_all.empty and len(df_all) >= 15:
+        classifier = RugPullClassifier(max_iter=50, learning_rate=0.08, max_depth=3)
+        classifier.train_with_rolling_cv(
+            df_all,
+            feature_cols=feature_cols,
+            target_col="is_rug_pull",
+            time_col="created_at",
+            n_splits=min(2, max(1, len(df_all) // 50))
+        )
+        pred = classifier.predict(feat_dict, mint=mint)
+        ml_info = {
+            "rug_probability": round(pred.rug_probability * 100.0, 2),
+            "predicted_label": pred.predicted_label,
+            "verdict": "RUG / COLLAPSE (1)" if pred.predicted_label == 1 else "VIABLE / SURVIVING (0)",
+            "risk_tier": pred.risk_tier
+        }
+
+    return {
+        "status": "success",
+        "is_evm": False,
+        "mint": mint,
+        "token": {
+            "mint": mint,
+            "name": token_name,
+            "symbol": token_symbol,
+            "creator": creator,
+            "initial_buy": dev_buy,
+            "sol_amount": dev_sol,
+            "in_database": not tok_df.empty,
+            "on_chain_found": on_chain_found
+        },
+        "features": {k: round(float(v), 4) if isinstance(v, (float, np.floating)) else v for k, v in feat_dict.items() if k in feature_cols},
+        "forensics": report.model_dump(),
+        "survival": survival_info,
+        "classifier": ml_info,
+        "trades_count": len(trades_df)
     }
 
 

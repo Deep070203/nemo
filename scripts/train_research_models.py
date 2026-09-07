@@ -21,7 +21,7 @@ console = Console()
 
 def run_training_pipeline():
     settings = load_settings()
-    storage = DuckDBStorage(settings.storage.database_path)
+    storage = DuckDBStorage(settings.storage.database_path, read_only=True)
 
     console.print(Panel("[bold cyan]NEMO: STATISTICAL SURVIVAL & MACHINE LEARNING PIPELINE[/bold cyan]\n"
                         "[dim]Methodology aligned with arXiv:2608.20271 & Srifa et al. (2025)[/dim]", style="cyan"))

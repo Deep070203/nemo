@@ -53,6 +53,36 @@
       </div>
     </header>
 
+    <!-- Dedicated Coin Inspector Search & Audit Strip -->
+    <div class="inspect-search-strip">
+      <div class="inspect-search-inner">
+        <div class="inspect-search-input-wrap">
+          <span class="search-lens">🔍</span>
+          <input type="text" id="inspectCoinInput" placeholder="Paste ANY address to audit (e.g. 7Y1Cv...pump, HcRLc..., or EVM contract 0x39dB...)" autocomplete="off" />
+          <button id="btnInspectClear" class="btn-clear-search" title="Clear" style="display: none;">✕</button>
+        </div>
+        <button id="btnInspectCoin" class="btn btn-primary btn-inspect">⚡ Audit & Predict</button>
+      </div>
+      <!-- EVM Cross-Chain Diagnostic Banner -->
+      <div id="evmDiagnosticBanner" class="evm-banner" style="display: none;">
+        <div class="evm-banner-header">
+          <span class="evm-badge">⚠️ EVM CROSS-CHAIN ADDRESS DETECTED</span>
+          <span id="evmNetworkTag" class="evm-network-tag">Robinhood Chain / Arbitrum Nitro Stack</span>
+        </div>
+        <div class="evm-banner-body">
+          <p id="evmExplanationText" class="evm-text"></p>
+          <div class="evm-meta-grid">
+            <div><span class="lbl">Contract Address:</span> <code id="evmContractCode" class="val-mono"></code></div>
+            <div><span class="lbl">Identified Asset:</span> <strong id="evmAssetName"></strong></div>
+            <div><span class="lbl">Solana Compatibility:</span> <span class="badge-red">Incompatible Format</span></div>
+          </div>
+          <div class="evm-tip">
+            💡 <em>Nemo's real-time pipeline is built specifically for Solana / Pump.fun bonding curves (Base58 mint addresses). To audit EVM memecoins, an EVM JSON-RPC provider and Uniswap pool listener are required.</em>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Main Multi-Column HUD Layout -->
     <main class="dashboard-grid">
       
@@ -132,6 +162,38 @@
               <h4 class="section-title">Triggered Alerts & Forensic Flags</h4>
               <div class="flags-list" id="inspectorFlagsList">
                 <span class="flag-pill clean">No malicious heuristics triggered</span>
+              </div>
+            </div>
+
+            <!-- Machine Learning & Survival Analysis Section -->
+            <div class="ml-prediction-card" id="mlPredictionCard" style="display: none;">
+              <div class="ml-card-header">
+                <div class="ml-title-group">
+                  <span class="ml-badge">🤖 STATISTICAL ML & SURVIVAL VERDICT</span>
+                  <span class="ml-subtitle">arXiv:2608.20271 & Srifa et al. (2025) Rolling Gradient Boosting</span>
+                </div>
+                <div class="ml-verdict-tag" id="mlVerdictTag">ANALYZING</div>
+              </div>
+              <div class="ml-card-body">
+                <div class="ml-stat-col">
+                  <span class="ml-lbl">Rug Probability</span>
+                  <span class="ml-val" id="mlRugProb">0.0%</span>
+                </div>
+                <div class="ml-stat-col">
+                  <span class="ml-lbl">Risk Tier</span>
+                  <span class="ml-val tier-tag" id="mlRiskTier">LOW</span>
+                </div>
+                <div class="ml-stat-col">
+                  <span class="ml-lbl">Cox Hazard Multiplier</span>
+                  <span class="ml-val" id="mlHazardMult">1.00x</span>
+                </div>
+                <div class="ml-stat-col">
+                  <span class="ml-lbl">Instantaneous Collapse Risk</span>
+                  <span class="ml-sub" id="mlHazardInterp">Stable baseline dynamics</span>
+                </div>
+              </div>
+              <div class="ml-features-row" id="mlFeaturesRow">
+                <!-- 5-minute predictor chips -->
               </div>
             </div>
 

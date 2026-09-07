@@ -65,6 +65,25 @@
     valTelegram: document.getElementById('valTelegram'),
     valSocialScore: document.getElementById('valSocialScore'),
 
+    // Universal Coin Inspector
+    inspectCoinInput: document.getElementById('inspectCoinInput'),
+    btnInspectCoin: document.getElementById('btnInspectCoin'),
+    btnInspectClear: document.getElementById('btnInspectClear'),
+    evmDiagnosticBanner: document.getElementById('evmDiagnosticBanner'),
+    evmNetworkTag: document.getElementById('evmNetworkTag'),
+    evmExplanationText: document.getElementById('evmExplanationText'),
+    evmContractCode: document.getElementById('evmContractCode'),
+    evmAssetName: document.getElementById('evmAssetName'),
+
+    // ML & Survival Card
+    mlPredictionCard: document.getElementById('mlPredictionCard'),
+    mlVerdictTag: document.getElementById('mlVerdictTag'),
+    mlRugProb: document.getElementById('mlRugProb'),
+    mlRiskTier: document.getElementById('mlRiskTier'),
+    mlHazardMult: document.getElementById('mlHazardMult'),
+    mlHazardInterp: document.getElementById('mlHazardInterp'),
+    mlFeaturesRow: document.getElementById('mlFeaturesRow'),
+
     // Right Tabs
     tabTradeTape: document.getElementById('tabTradeTape'),
     tabSurvival: document.getElementById('tabSurvival'),
@@ -419,6 +438,41 @@
       dom.valTelegram.textContent = 'Pending';
       dom.valSocialScore.textContent = '40/100';
     }
+
+    // Machine Learning & Survival Prediction Card
+    if (mlInfo || survivalInfo) {
+      dom.mlPredictionCard.style.display = 'block';
+      if (mlInfo) {
+        dom.mlRugProb.textContent = `${mlInfo.rug_probability}%`;
+        dom.mlRiskTier.textContent = mlInfo.risk_tier;
+        dom.mlRiskTier.className = `ml-val tier-tag ${mlInfo.risk_tier.toLowerCase()}`;
+        dom.mlVerdictTag.textContent = mlInfo.verdict;
+        dom.mlVerdictTag.className = `ml-verdict-tag ${mlInfo.predicted_label === 1 ? 'rug' : ''}`;
+      } else {
+        dom.mlRugProb.textContent = 'N/A';
+        dom.mlRiskTier.textContent = tier;
+        dom.mlVerdictTag.textContent = tier === 'CRITICAL' || tier === 'HIGH' ? 'RUG RISK' : 'VIABLE';
+      }
+
+      if (survivalInfo) {
+        dom.mlHazardMult.textContent = `${survivalInfo.hazard_multiplier}x`;
+        dom.mlHazardInterp.textContent = survivalInfo.interpretation;
+      } else {
+        dom.mlHazardMult.textContent = '1.00x';
+        dom.mlHazardInterp.textContent = 'Baseline cohort dynamics';
+      }
+
+      if (features) {
+        dom.mlFeaturesRow.innerHTML = Object.entries(features).map(([k, v]) => {
+          const isFlag = (k === 'dev_buy_supply_pct' && v > 10) || (k === 'vpin_score' && v > 0.4) || (k === 'is_jito_mev' && v === 1);
+          return `<span class="ml-feat-chip ${isFlag ? 'flagged' : ''}">${k}: <strong>${typeof v === 'number' ? v.toFixed(3) : v}</strong></span>`;
+        }).join('');
+      } else {
+        dom.mlFeaturesRow.innerHTML = '';
+      }
+    } else {
+      dom.mlPredictionCard.style.display = 'none';
+    }
   }
 
   // =========================================================================
@@ -579,6 +633,103 @@
     dom.btnViewSurvival.addEventListener('click', () => {
       dom.tabSurvival.click();
     });
+
+    // =======================================================================
+    // Universal Coin Inspector Search Listeners
+    // =======================================================================
+    if (dom.btnInspectCoin) {
+      dom.btnInspectCoin.addEventListener('click', () => {
+        const addr = dom.inspectCoinInput ? dom.inspectCoinInput.value : '';
+        inspectAddress(addr);
+      });
+    }
+
+    if (dom.inspectCoinInput) {
+      dom.inspectCoinInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          inspectAddress(dom.inspectCoinInput.value);
+        }
+      });
+
+      dom.inspectCoinInput.addEventListener('input', (e) => {
+        if (dom.btnInspectClear) {
+          dom.btnInspectClear.style.display = e.target.value ? 'block' : 'none';
+        }
+      });
+    }
+
+    if (dom.btnInspectClear) {
+      dom.btnInspectClear.addEventListener('click', () => {
+        dom.inspectCoinInput.value = '';
+        dom.btnInspectClear.style.display = 'none';
+        if (dom.evmDiagnosticBanner) dom.evmDiagnosticBanner.style.display = 'none';
+        dom.inspectCoinInput.focus();
+      });
+    }
+  }
+
+  // =========================================================================
+  // Universal Coin Inspector Logic
+  // =========================================================================
+  async function inspectAddress(address) {
+    if (!address || !address.trim()) return;
+    const cleanAddr = address.trim();
+
+    if (dom.btnInspectCoin) {
+      dom.btnInspectCoin.disabled = true;
+      dom.btnInspectCoin.textContent = '⏳ Inspecting...';
+    }
+    if (dom.evmDiagnosticBanner) dom.evmDiagnosticBanner.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/inspect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: cleanAddr })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'Inspection request failed');
+      }
+
+      // Case 1: EVM Cross-Chain Address Detected
+      if (data.status === 'evm_diagnostic') {
+        if (dom.evmNetworkTag) dom.evmNetworkTag.textContent = data.detected_network;
+        if (dom.evmExplanationText) dom.evmExplanationText.textContent = `${data.message} ${data.explanation}`;
+        if (dom.evmContractCode) dom.evmContractCode.textContent = data.address;
+        if (dom.evmAssetName) dom.evmAssetName.textContent = data.identified_asset;
+        if (dom.evmDiagnosticBanner) {
+          dom.evmDiagnosticBanner.style.display = 'block';
+          dom.evmDiagnosticBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        return;
+      }
+
+      // Case 2: Solana Token Full ML & Forensic Result
+      if (data.status === 'success') {
+        if (dom.evmDiagnosticBanner) dom.evmDiagnosticBanner.style.display = 'none';
+
+        // Update local maps
+        state.tokens.set(data.mint, data.token);
+        state.audits.set(data.mint, data.forensics);
+        state.activeMint = data.mint;
+
+        // Render in Inspector with full ML cards
+        renderInspector(data.token, data.forensics, data.classifier, data.survival, data.features);
+
+        // Refresh token list
+        renderTokenList();
+      }
+    } catch (err) {
+      alert('Inspection Error: ' + err.message);
+    } finally {
+      if (dom.btnInspectCoin) {
+        dom.btnInspectCoin.disabled = false;
+        dom.btnInspectCoin.textContent = '⚡ Audit & Predict';
+      }
+    }
   }
 
   // Run app on DOM ready

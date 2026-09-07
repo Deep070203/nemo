@@ -125,14 +125,14 @@ class SurvivalAnalysisEngine:
 
         results = []
         for i, name in enumerate(feature_names):
-            # Scale back coefficient to original feature scale
+            # Scale back coefficient to original feature scale with numerical clamping
             beta_orig = beta_hat[i] / stds[i]
             se_orig = std_errs[i] / stds[i]
             z = beta_orig / (se_orig + 1e-8)
             p_val = 2 * (1 - norm.cdf(abs(z)))
-            hr = float(np.exp(np.clip(beta_orig, -10.0, 10.0)))
-            ci_low = float(np.exp(beta_orig - 1.96 * se_orig))
-            ci_high = float(np.exp(beta_orig + 1.96 * se_orig))
+            hr = float(np.exp(np.clip(beta_orig, -4.0, 4.0)))
+            ci_low = float(np.exp(np.clip(beta_orig - 1.96 * se_orig, -4.0, 4.0)))
+            ci_high = float(np.exp(np.clip(beta_orig + 1.96 * se_orig, -4.0, 4.0)))
 
             results.append(HazardRatioResult(
                 feature_name=name,

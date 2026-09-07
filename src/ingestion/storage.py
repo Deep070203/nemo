@@ -1,6 +1,7 @@
 """Persistent storage manager powered by DuckDB."""
 
 import asyncio
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 import duckdb
@@ -10,16 +11,33 @@ from src.ingestion.models import TokenCreatedEvent, TokenTradeEvent
 class DuckDBStorage:
     """High-throughput relational storage engine for Pump.fun research events."""
 
-    def __init__(self, db_path: str = "data/nemo_research.duckdb", batch_size: int = 50, flush_interval: float = 5.0):
+    def __init__(self, db_path: str = "data/nemo_research.duckdb", batch_size: int = 50, flush_interval: float = 5.0, read_only: bool = False):
         self.db_path = db_path
         self.batch_size = batch_size
         self.flush_interval = flush_interval
+        self.read_only = read_only
+        self._is_snapshot = False
 
         # Ensure directory exists
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-        self._conn = duckdb.connect(self.db_path)
-        self._init_schema()
+        try:
+            self._conn = duckdb.connect(self.db_path, read_only=read_only)
+            if not read_only:
+                self._init_schema()
+        except duckdb.IOException as e:
+            if read_only and "Conflicting lock" in str(e):
+                import shutil, time
+                snapshot_path = f"/tmp/nemo_snapshot_{int(time.time())}.duckdb"
+                shutil.copy2(self.db_path, snapshot_path)
+                wal_path = f"{self.db_path}.wal"
+                if os.path.exists(wal_path):
+                    shutil.copy2(wal_path, f"{snapshot_path}.wal")
+                self._conn = duckdb.connect(snapshot_path, read_only=True)
+                self._is_snapshot = True
+                self._snapshot_path = snapshot_path
+            else:
+                raise
 
         # Buffers for asynchronous batch insertion
         self._token_buffer: List[Dict[str, Any]] = []

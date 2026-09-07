@@ -892,3 +892,268 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* =========================================================================
+   Dedicated Universal Coin Inspector Search Strip & Banners
+   ========================================================================= */
+.inspect-search-strip {
+  padding: 10px 24px 14px 24px;
+  background: rgba(13, 17, 23, 0.7);
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inspect-search-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1100px;
+  width: 100%;
+}
+
+.inspect-search-input-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inspect-search-input-wrap .search-lens {
+  position: absolute;
+  left: 14px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.inspect-search-input-wrap input {
+  width: 100%;
+  background: rgba(18, 24, 38, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 38px 10px 38px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.inspect-search-input-wrap input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.35);
+  background: rgba(22, 30, 48, 0.95);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+}
+.btn-clear-search:hover { color: #fff; }
+
+.btn-inspect {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* EVM Cross-Chain Diagnostic Banner */
+.evm-banner {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  animation: fadeIn 0.25s ease;
+}
+
+.evm-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.evm-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f59e0b;
+  letter-spacing: 0.8px;
+}
+
+.evm-network-tag {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.evm-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.evm-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+.evm-meta-grid .lbl { color: var(--text-dim); }
+.evm-meta-grid .val-mono { font-family: var(--font-mono); color: #fff; font-size: 10px; }
+.badge-red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.evm-tip {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ML Prediction & Survival Analysis Card */
+.ml-prediction-card {
+  background: linear-gradient(135deg, rgba(20, 27, 45, 0.95), rgba(15, 20, 32, 0.95));
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.ml-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.ml-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ml-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--accent-cyan);
+}
+
+.ml-subtitle {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.ml-verdict-tag {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--status-clean);
+  border: 1px solid var(--status-clean);
+}
+.ml-verdict-tag.rug {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--status-critical);
+  border-color: var(--status-critical);
+}
+
+.ml-card-body {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ml-stat-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ml-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ml-val {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: #fff;
+}
+
+.ml-val.tier-tag {
+  font-size: 14px;
+}
+.ml-val.tier-tag.low { color: var(--status-clean); }
+.ml-val.tier-tag.medium { color: var(--status-medium); }
+.ml-val.tier-tag.high { color: var(--status-high); }
+.ml-val.tier-tag.critical { color: var(--status-critical); }
+
+.ml-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.ml-features-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ml-feat-chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.ml-feat-chip strong {
+  color: #fff;
+  margin-left: 3px;
+}
+.ml-feat-chip.flagged {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+}
+

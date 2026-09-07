@@ -47,7 +47,7 @@ class DatasetBuilder:
             trades_df = self.storage._conn.execute("""
                 SELECT tx_type, sol_amount, token_amount, price_sol, v_sol, timestamp
                 FROM trades
-                WHERE mint = $1 AND timestamp <= $2
+                WHERE mint || '' = $1 AND timestamp <= $2
                 ORDER BY timestamp ASC;
             """, [mint, t_label]).df()
 
