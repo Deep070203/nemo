@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=4.0">
+  <link rel="stylesheet" href="/static/style.css?v=4.1">
 </head>
 <body>
   <div class="app-container">
@@ -519,30 +519,30 @@
                 <span class="badge badge-accent">GROUND TRUTH BENCHMARK</span>
               </div>
               <div class="confusion-matrix-widget">
-                <div class="matrix-cell tp">
+                <div class="matrix-cell tp" id="cellMatrixTP" onclick="window.filterMatrixQuadrant('tp')" title="Click to inspect True Positive coins (Predicted Rug & Rugged)">
                   <span class="m-val" id="matrixTP">0</span>
-                  <span class="m-lbl">TRUE POSITIVES</span>
-                  <span class="m-sub">Predicted Rug & Rugged</span>
+                  <span class="m-lbl">🎯 TRUE POSITIVES</span>
+                  <span class="m-sub">Predicted Rug & Rugged (Click to View)</span>
                 </div>
-                <div class="matrix-cell fp">
+                <div class="matrix-cell fp" id="cellMatrixFP" onclick="window.filterMatrixQuadrant('fp')" title="Click to inspect False Positives (Predicted Rug, but Survived/CTO)">
                   <span class="m-val" id="matrixFP">0</span>
-                  <span class="m-lbl">FALSE POSITIVES (CTOs)</span>
+                  <span class="m-lbl">🤝 FALSE POSITIVES (CTOs)</span>
                   <span class="m-sub">Predicted Rug, but Survived!</span>
                 </div>
-                <div class="matrix-cell fn">
+                <div class="matrix-cell fn" id="cellMatrixFN" onclick="window.filterMatrixQuadrant('fn')" title="Click to inspect False Negatives (Missed Slow Rugs)">
                   <span class="m-val" id="matrixFN">0</span>
-                  <span class="m-lbl">FALSE NEGATIVES (Missed)</span>
+                  <span class="m-lbl">⚠️ FALSE NEGATIVES (Missed)</span>
                   <span class="m-sub">Predicted Clean, but Slow-Rugged</span>
                 </div>
-                <div class="matrix-cell tn">
+                <div class="matrix-cell tn" id="cellMatrixTN" onclick="window.filterMatrixQuadrant('tn')" title="Click to inspect True Negatives (Clean Survivors)">
                   <span class="m-val" id="matrixTN">0</span>
-                  <span class="m-lbl">TRUE NEGATIVES</span>
+                  <span class="m-lbl">🛡️ TRUE NEGATIVES</span>
                   <span class="m-sub">Predicted Clean & Survived</span>
                 </div>
               </div>
               <div class="matrix-summary-row">
                 <div><span>Empirical Accuracy:</span> <strong id="lblAccuracy">0.0%</strong></div>
-                <div><span>Precision (Positive Predictive Value):</span> <strong id="lblPrecision">0.0%</strong></div>
+                <div><span>Precision (PPV):</span> <strong id="lblPrecision">0.0%</strong></div>
                 <div><span>Recall (Sensitivity):</span> <strong id="lblRecall">0.0%</strong></div>
               </div>
             </div>
@@ -573,50 +573,38 @@
 
           </div>
 
-          <!-- False Alarms vs Missed Rugs Breakdown Tables -->
-          <div class="error-breakdown-row">
-            <div class="learning-card">
-              <div class="card-header-simple">
-                <h4>🤝 Top False Alarms / CTOs (Predicted Rug, But Survived)</h4>
+          <!-- Interactive Confusion Matrix Quadrant Coin Explorer -->
+          <div class="learning-card" style="margin-top: 16px;">
+            <div class="card-header-simple" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h4 id="matrixExplorerTitle">🎯 Confirmed True Positives (Predicted Rug & Accurately Caught)</h4>
+                <p class="card-hint" id="matrixExplorerHint" style="margin: 2px 0 0 0;">Tokens accurately caught by the forensic & Bayesian engine that subsequent 10h audits confirmed dead.</p>
               </div>
-              <p class="card-hint">Tokens flagged high-risk at Block 0 that succeeded anyway (e.g. community takeover or early dump bought up).</p>
-              <div class="cohort-table-wrap">
-                <table class="cohort-table">
-                  <thead>
-                    <tr>
-                      <th>TOKEN</th>
-                      <th>MARKET CAP</th>
-                      <th>24H VOL</th>
-                      <th>AUDIT OBSERVATIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody id="topFPTableBody">
-                    <tr><td colspan="4" class="td-empty">No False Positives recorded yet.</td></tr>
-                  </tbody>
-                </table>
+              <div class="quadrant-tab-group">
+                <button class="btn-matrix-tab active" id="tabMatrixTP" onclick="window.filterMatrixQuadrant('tp')">🎯 True Positives (<span id="countMatrixTabTP">0</span>)</button>
+                <button class="btn-matrix-tab" id="tabMatrixFP" onclick="window.filterMatrixQuadrant('fp')">🤝 False Alarms / CTOs (<span id="countMatrixTabFP">0</span>)</button>
+                <button class="btn-matrix-tab" id="tabMatrixFN" onclick="window.filterMatrixQuadrant('fn')">⚠️ Missed Rugs (<span id="countMatrixTabFN">0</span>)</button>
+                <button class="btn-matrix-tab" id="tabMatrixTN" onclick="window.filterMatrixQuadrant('tn')">🛡️ True Survivors (<span id="countMatrixTabTN">0</span>)</button>
               </div>
             </div>
 
-            <div class="learning-card">
-              <div class="card-header-simple">
-                <h4>⚠️ Missed Slow Rugs (Predicted Clean, But Collapsed)</h4>
-              </div>
-              <p class="card-hint">Tokens initially deemed low-risk that subsequently dumped or drained liquidity.</p>
-              <div class="cohort-table-wrap">
-                <table class="cohort-table">
-                  <thead>
-                    <tr>
-                      <th>TOKEN</th>
-                      <th>MARKET CAP</th>
-                      <th>24H VOL</th>
-                      <th>AUDIT OBSERVATIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody id="topFNTableBody">
-                    <tr><td colspan="4" class="td-empty">No False Negatives recorded yet.</td></tr>
-                  </tbody>
-                </table>
-              </div>
+            <div class="cohort-table-wrap" style="max-height: 480px; overflow-y: auto;">
+              <table class="cohort-table">
+                <thead>
+                  <tr>
+                    <th>TOKEN / ASSET</th>
+                    <th>SOLANA MINT</th>
+                    <th>PREDICTED RISK</th>
+                    <th>OUTCOME STATUS</th>
+                    <th>MARKET CAP</th>
+                    <th>24H VOLUME</th>
+                    <th>AUDIT & DETECTION OBSERVATIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="matrixCohortTableBody">
+                  <tr><td colspan="7" class="td-loading">Loading True Positive tokens...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -786,6 +774,6 @@
       </main>
     </div>
 
-  <script src="/static/app.js?v=4.0"></script>
+  <script src="/static/app.js?v=4.1"></script>
 </body>
 </html>

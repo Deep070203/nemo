@@ -208,3 +208,150 @@ def test_cohort_resurrection_cto_detection(temp_storage):
         assert any(s["mint"] == mint and s["status"] == "CTO" for s in survivors)
 
     asyncio.run(_run())
+
+
+def test_zero_volume_abandonment_hazard_scoring(temp_storage):
+    """Test that tokens with 0 or low trades default to HIGH risk (Abandonment Hazard), not LOW."""
+    async def _run():
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(hours=12)
+        mint = "GhostMint111111111111111111111111111111111"
+
+        # Insert a token with NO trades
+        temp_storage._conn.execute("""
+            INSERT INTO tokens (mint, name, symbol, creator, signature, initial_buy, sol_amount, created_at)
+            VALUES ($1, 'Ghost Coin', 'GHOST', 'dev_ghost', 'sig_g', 0, 0.0, $2);
+        """, [mint, old_time])
+
+        auditor = CohortAuditor(temp_storage)
+
+        # Mock DexScreener showing dead token
+        mock_data = {
+            mint: {
+                "mint": mint,
+                "name": "Ghost Coin",
+                "symbol": "GHOST",
+                "price_usd": 0.000001,
+                "market_cap_usd": 2960.0,
+                "volume_24h": 0.0,
+                "price_change_24h": 0.0,
+                "liquidity_usd": 0.0,
+                "dex_id": "pumpfun",
+                "is_graduated": False
+            }
+        }
+
+        with patch.object(auditor.dex_client, "fetch_tokens_batch", new=AsyncMock(return_value=mock_data)):
+            res = await auditor.audit_batch_t1(hours_threshold=10.0)
+
+        assert res["processed"] == 1
+        assert res["new_rugs"] == 1
+
+        rug = temp_storage.get_audit_bucket("rugs")[0]
+        # Must be classified as HIGH risk (Abandonment Hazard), NOT LOW!
+        assert rug["initial_risk_tier"] == "HIGH"
+        assert rug["initial_risk_score"] == 75
+
+        # Confusion Matrix: because pred_rug = HIGH and actual = RUG, this is a TRUE POSITIVE, NOT a False Negative!
+        stats = temp_storage.get_cohort_summary_stats()
+        lm = stats["learning_metrics"]
+        assert lm["true_positives"] == 1
+        assert lm["false_negatives_missed"] == 0
+
+    asyncio.run(_run())
+
+
+def test_get_cohort_matrix_tokens_and_learning_metrics(temp_storage):
+    """Test get_cohort_matrix_tokens method and top_true_positives list in learning metrics."""
+    now = datetime.now(timezone.utc)
+    # Insert a True Positive: predicted HIGH, confirmed CONFIRMED_RUG
+    temp_storage.upsert_token_audit({
+        "mint": "TPMint1111111111111111111111111111111111",
+        "name": "Caught Rug",
+        "symbol": "CAUGHT",
+        "status": "CONFIRMED_RUG",
+        "initial_risk_score": 85,
+        "initial_risk_tier": "HIGH",
+        "current_price_usd": 0.000001,
+        "current_mcap_usd": 2800.0,
+        "volume_24h": 10.0,
+        "price_change_24h": -95.0,
+        "audit_notes": "Zero volume collapse",
+        "created_at": now - timedelta(days=1),
+        "updated_at": now
+    })
+
+    # Test storage.get_cohort_matrix_tokens
+    tp_coins = temp_storage.get_cohort_matrix_tokens(matrix_type="tp", limit=10)
+    assert len(tp_coins) == 1
+    assert tp_coins[0]["symbol"] == "CAUGHT"
+    assert tp_coins[0]["initial_risk_tier"] == "HIGH"
+
+    # Test auditor.get_detailed_learning_metrics() contains top_true_positives
+    auditor = CohortAuditor(temp_storage)
+    metrics = auditor.get_detailed_learning_metrics()
+    assert "top_true_positives" in metrics
+    assert len(metrics["top_true_positives"]) == 1
+    assert metrics["top_true_positives"][0]["symbol"] == "CAUGHT"
+
+
+def test_dev_snipe_and_collapse_priority_classification(temp_storage):
+    """Test that a token with dev snipe (e.g. Claude) and -95% collapse is classified as CRITICAL / CONFIRMED_RUG (True Positive)."""
+    async def _run():
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(hours=14)
+        mint = "DevSnipeMint111111111111111111111111111111"
+
+        # Creator bought 79% of supply (790,000,000 tokens) with 85 SOL
+        temp_storage._conn.execute("""
+            INSERT INTO tokens (mint, name, symbol, creator, signature, initial_buy, sol_amount, created_at)
+            VALUES ($1, 'Claude Ai', 'Claude', 'dev_sniper', 'sig_s', 793100000.0, 85.0, $2);
+        """, [mint, old_time])
+
+        auditor = CohortAuditor(temp_storage)
+
+        # High volume ($182k) during the dump, but collapsed to $1,856 Mcap and -95.8% drop
+        mock_data = {
+            mint: {
+                "mint": mint,
+                "name": "Claude Ai",
+                "symbol": "Claude",
+                "price_usd": 0.0000018,
+                "market_cap_usd": 1856.0,
+                "volume_24h": 182466.0,
+                "price_change_24h": -95.78,
+                "liquidity_usd": 1856.0,
+                "dex_id": "pumpfun",
+                "is_graduated": False
+            }
+        }
+
+        with patch.object(auditor.dex_client, "fetch_tokens_batch", new=AsyncMock(return_value=mock_data)):
+            res = await auditor.audit_batch_t1(hours_threshold=10.0)
+
+        assert res["processed"] == 1
+        assert res["new_rugs"] == 1
+        assert res["new_survivors"] == 0
+
+        rug = temp_storage.get_audit_bucket("rugs")[0]
+        # Must be classified as CRITICAL risk due to >10% dev supply / >5 SOL initial buy
+        assert rug["initial_risk_tier"] == "CRITICAL"
+        assert rug["initial_risk_score"] == 95
+        # Must be CONFIRMED_RUG due to -95% drop and sub-floor Mcap ($1,856)
+        assert rug["status"] == "CONFIRMED_RUG"
+
+        # It must land in True Positives (Predicted Rug & Confirmed Rugged)
+        tp_tokens = temp_storage.get_cohort_matrix_tokens(matrix_type="tp")
+        assert len(tp_tokens) == 1
+        assert tp_tokens[0]["mint"] == mint
+        assert tp_tokens[0]["symbol"] == "Claude"
+
+        # Must NOT be in False Negatives or True Negatives (Survivors)
+        fn_tokens = temp_storage.get_cohort_matrix_tokens(matrix_type="fn")
+        tn_tokens = temp_storage.get_cohort_matrix_tokens(matrix_type="tn")
+        assert len(fn_tokens) == 0
+        assert len(tn_tokens) == 0
+
+    asyncio.run(_run())
+
+

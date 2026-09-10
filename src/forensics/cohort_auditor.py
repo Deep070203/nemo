@@ -126,8 +126,49 @@ class CohortAuditor:
 
             has_critical = any(r[0] == "CRITICAL" for r in flag_rows)
             has_high = any(r[0] == "HIGH" for r in flag_rows)
-            initial_tier = "CRITICAL" if has_critical else ("HIGH" if has_high else "LOW")
-            initial_score = 90 if has_critical else (70 if has_high else 25)
+
+            # Query early trade momentum from DuckDB trades table
+            trade_stats = self.storage._conn.execute("""
+                SELECT 
+                    COUNT(*), 
+                    COALESCE(SUM(sol_amount), 0.0), 
+                    COUNT(DISTINCT trader)
+                FROM trades 
+                WHERE mint = $1;
+            """, [mint]).fetchone()
+
+            early_trades = trade_stats[0] if trade_stats else 0
+            early_vol_sol = float(trade_stats[1]) if trade_stats else 0.0
+            unique_traders = trade_stats[2] if trade_stats else 0
+
+            # Query token creation details (dev snipe / initial buy)
+            token_row = self.storage._conn.execute("""
+                SELECT initial_buy, sol_amount FROM tokens WHERE mint = $1;
+            """, [mint]).fetchone()
+
+            dev_bought_tokens = float(token_row[0]) if (token_row and token_row[0]) else 0.0
+            dev_sol_spent = float(token_row[1]) if (token_row and token_row[1]) else 0.0
+            # Total supply on pump.fun is 1,000,000,000 tokens (1 billion)
+            dev_supply_pct = (dev_bought_tokens / 1_000_000_000.0) * 100.0
+
+            # Bayesian Risk Scoring (Inverted Prior: Guilty of Abandonment/Rug until proven viable)
+            if has_critical or dev_supply_pct >= 10.0 or dev_sol_spent >= 5.0:
+                initial_tier = "CRITICAL"
+                initial_score = 95
+            elif has_high:
+                initial_tier = "HIGH"
+                initial_score = 80
+            elif early_trades < 5 or early_vol_sol < 2.0 or unique_traders < 4:
+                # Abandonment Hazard: lack of early transaction velocity & liquidity
+                initial_tier = "HIGH"
+                initial_score = 75
+            elif early_trades < 10 or early_vol_sol < 5.0 or unique_traders < 8:
+                initial_tier = "MEDIUM"
+                initial_score = 45
+            else:
+                # Proven early momentum with clean forensics
+                initial_tier = "LOW"
+                initial_score = 20
 
             # Decision Logic for Stage 1 (10 Hours)
             status = "CONFIRMED_RUG"
@@ -145,23 +186,30 @@ class CohortAuditor:
                 change24 = m_info["price_change_24h"]
                 is_graduated = m_info["is_graduated"]
 
+                # 1. Raydium AMM Graduation (Definitive Survivor)
                 if is_graduated:
                     status = "SURVIVING_CANDIDATE"
-                    audit_notes.append("Graduated to Raydium AMM")
-                elif current_mcap >= 15000.0 or vol24 >= 500.0:
-                    status = "SURVIVING_CANDIDATE"
-                    audit_notes.append(f"Active market: Mcap ${current_mcap:,.0f}, Vol ${vol24:,.0f}")
-                elif change24 <= -92.0 or current_mcap < 3500.0:
+                    audit_notes.append(f"Graduated to Raydium AMM (Mcap ${current_mcap:,.0f})")
+                # 2. Severe Collapse / Rug Dump (Definitive Rug)
+                # Any token that dumped >70% or whose market cap is sub-floor (<$7,500) has rugged
+                elif change24 <= -70.0 or current_mcap < 7500.0:
                     status = "CONFIRMED_RUG"
                     audit_notes.append(f"Severe collapse: Mcap ${current_mcap:,.0f}, 24h change {change24:.1f}%")
+                # 3. High Market Cap Active Runner (True Survivor on curve)
+                elif current_mcap >= 25000.0 and change24 > -50.0 and vol24 >= 3000.0:
+                    status = "SURVIVING_CANDIDATE"
+                    audit_notes.append(f"Active runner: Mcap ${current_mcap:,.0f}, Vol ${vol24:,.0f}")
+                # 4. Moderate Curve Progress with Solid Liquidity
+                elif current_mcap >= 15000.0 and change24 > -40.0 and vol24 >= 5000.0:
+                    status = "SURVIVING_CANDIDATE"
+                    audit_notes.append(f"Healthy bonding curve: Mcap ${current_mcap:,.0f}, Vol ${vol24:,.0f}")
+                # 5. Stalled curve / failing momentum -> Rug
                 else:
-                    # Borderline: check trading activity
-                    if vol24 < 150.0:
-                        status = "CONFIRMED_RUG"
-                        audit_notes.append("Abandoned curve (24h volume < $150)")
+                    status = "CONFIRMED_RUG"
+                    if current_mcap < 15000.0:
+                        audit_notes.append(f"Stalled below escape velocity: Mcap ${current_mcap:,.0f}, Vol ${vol24:,.0f}")
                     else:
-                        status = "SURVIVING_CANDIDATE"
-                        audit_notes.append("Low volume but maintains price floor")
+                        audit_notes.append(f"Failing momentum: Mcap ${current_mcap:,.0f}, 24h change {change24:.1f}%")
             else:
                 # No pairs indexed on DexScreener after 10 hours: almost certainly abandoned or dead curve
                 status = "CONFIRMED_RUG"
@@ -236,11 +284,11 @@ class CohortAuditor:
 
             # 2. Dynamic Survivor Demotion to Rug:
             # If token was considered a survivor, but collapsed or failed re-scan, move to CONFIRMED_RUG
-            is_survivor = r["status"] in ("SURVIVING_CANDIDATE", "CTO")
+            is_survivor = r["status"] in ("SURVIVING_CANDIDATE", "CTO", "GRADUATED")
             is_demoted = is_survivor and (
-                (current_mcap < 3500.0 and vol24 < 300.0) or
-                change24 <= -85.0 or
-                (vol24 < 80.0 and not is_graduated)
+                (not is_graduated and current_mcap < 7500.0) or
+                change24 <= -70.0 or
+                (not is_graduated and vol24 < 1000.0 and current_mcap < 20000.0)
             )
 
             new_status = r["status"]
@@ -332,32 +380,56 @@ class CohortAuditor:
 
             summary["rule_attribution"] = rule_attribution
 
+            # Query recent True Positives (predicted rug & confirmed rugged)
+            tp_rows = self.storage._conn.execute("""
+                SELECT mint, symbol, name, initial_risk_score, initial_risk_tier, current_mcap_usd, volume_24h, audit_notes, updated_at
+                FROM token_audits
+                WHERE initial_risk_tier IN ('HIGH', 'CRITICAL')
+                  AND status IN ('CONFIRMED_RUG', 'SLOW_RUG')
+                ORDER BY updated_at DESC
+                LIMIT 25;
+            """).df().to_dict(orient="records")
+            summary["top_true_positives"] = tp_rows
+
             # Query recent False Positives (predicted rug, but survived - potential CTOs)
             fp_rows = self.storage._conn.execute("""
-                SELECT mint, symbol, current_mcap_usd, volume_24h, audit_notes, human_notes
+                SELECT mint, symbol, name, initial_risk_score, initial_risk_tier, current_mcap_usd, volume_24h, audit_notes, human_notes, updated_at
                 FROM token_audits
                 WHERE initial_risk_tier IN ('HIGH', 'CRITICAL')
                   AND status IN ('SURVIVING_CANDIDATE', 'GRADUATED', 'CTO')
                 ORDER BY current_mcap_usd DESC
-                LIMIT 10;
+                LIMIT 25;
             """).df().to_dict(orient="records")
             summary["top_false_positives"] = fp_rows
 
             # Query recent False Negatives (predicted clean, but rugged - missed soft rugs)
             fn_rows = self.storage._conn.execute("""
-                SELECT mint, symbol, current_mcap_usd, volume_24h, audit_notes, human_notes
+                SELECT mint, symbol, name, initial_risk_score, initial_risk_tier, current_mcap_usd, volume_24h, audit_notes, human_notes, updated_at
                 FROM token_audits
                 WHERE initial_risk_tier = 'LOW'
                   AND status IN ('CONFIRMED_RUG', 'SLOW_RUG')
                 ORDER BY updated_at DESC
-                LIMIT 10;
+                LIMIT 25;
             """).df().to_dict(orient="records")
             summary["top_false_negatives"] = fn_rows
+
+            # Query recent True Negatives (predicted clean & confirmed survived)
+            tn_rows = self.storage._conn.execute("""
+                SELECT mint, symbol, name, initial_risk_score, initial_risk_tier, current_mcap_usd, volume_24h, audit_notes, updated_at
+                FROM token_audits
+                WHERE initial_risk_tier = 'LOW'
+                  AND status IN ('SURVIVING_CANDIDATE', 'GRADUATED', 'CTO')
+                ORDER BY current_mcap_usd DESC
+                LIMIT 25;
+            """).df().to_dict(orient="records")
+            summary["top_true_negatives"] = tn_rows
 
         except Exception as e:
             logger.debug(f"Learning metrics calculation error: {e}")
             summary["rule_attribution"] = []
+            summary["top_true_positives"] = []
             summary["top_false_positives"] = []
             summary["top_false_negatives"] = []
+            summary["top_true_negatives"] = []
 
         return summary

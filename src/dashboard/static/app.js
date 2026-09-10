@@ -146,6 +146,21 @@
     matrixFP: document.getElementById('matrixFP'),
     matrixFN: document.getElementById('matrixFN'),
     matrixTN: document.getElementById('matrixTN'),
+    cellMatrixTP: document.getElementById('cellMatrixTP'),
+    cellMatrixFP: document.getElementById('cellMatrixFP'),
+    cellMatrixFN: document.getElementById('cellMatrixFN'),
+    cellMatrixTN: document.getElementById('cellMatrixTN'),
+    tabMatrixTP: document.getElementById('tabMatrixTP'),
+    tabMatrixFP: document.getElementById('tabMatrixFP'),
+    tabMatrixFN: document.getElementById('tabMatrixFN'),
+    tabMatrixTN: document.getElementById('tabMatrixTN'),
+    countMatrixTabTP: document.getElementById('countMatrixTabTP'),
+    countMatrixTabFP: document.getElementById('countMatrixTabFP'),
+    countMatrixTabFN: document.getElementById('countMatrixTabFN'),
+    countMatrixTabTN: document.getElementById('countMatrixTabTN'),
+    matrixExplorerTitle: document.getElementById('matrixExplorerTitle'),
+    matrixExplorerHint: document.getElementById('matrixExplorerHint'),
+    matrixCohortTableBody: document.getElementById('matrixCohortTableBody'),
     lblAccuracy: document.getElementById('lblAccuracy'),
     lblPrecision: document.getElementById('lblPrecision'),
     lblRecall: document.getElementById('lblRecall'),
@@ -1266,16 +1281,25 @@
     }
   }
 
+  let activeMatrixQuadrant = 'tp';
+  let cachedLearningData = null;
+
   async function loadLearningMetrics() {
     try {
       const res = await fetch('/api/cohorts/learning-metrics');
       const data = await res.json();
+      cachedLearningData = data;
       const lm = data.learning_metrics || {};
 
-      if (dom.matrixTP) dom.matrixTP.textContent = lm.true_positives || 0;
-      if (dom.matrixFP) dom.matrixFP.textContent = lm.false_positives_cto || 0;
-      if (dom.matrixFN) dom.matrixFN.textContent = lm.false_negatives_missed || 0;
-      if (dom.matrixTN) dom.matrixTN.textContent = lm.true_negatives || 0;
+      if (dom.matrixTP) dom.matrixTP.textContent = (lm.true_positives || 0).toLocaleString();
+      if (dom.matrixFP) dom.matrixFP.textContent = (lm.false_positives_cto || 0).toLocaleString();
+      if (dom.matrixFN) dom.matrixFN.textContent = (lm.false_negatives_missed || 0).toLocaleString();
+      if (dom.matrixTN) dom.matrixTN.textContent = (lm.true_negatives || 0).toLocaleString();
+
+      if (dom.countMatrixTabTP) dom.countMatrixTabTP.textContent = (lm.true_positives || 0).toLocaleString();
+      if (dom.countMatrixTabFP) dom.countMatrixTabFP.textContent = (lm.false_positives_cto || 0).toLocaleString();
+      if (dom.countMatrixTabFN) dom.countMatrixTabFN.textContent = (lm.false_negatives_missed || 0).toLocaleString();
+      if (dom.countMatrixTabTN) dom.countMatrixTabTN.textContent = (lm.true_negatives || 0).toLocaleString();
 
       if (dom.lblAccuracy) dom.lblAccuracy.textContent = `${lm.accuracy_pct || 0}%`;
       if (dom.lblPrecision) dom.lblPrecision.textContent = `${lm.precision_pct || 0}%`;
@@ -1301,44 +1325,114 @@
         }
       }
 
-      // Render Top False Positives (CTOs)
-      if (dom.topFPTableBody) {
-        const fps = data.top_false_positives || [];
-        if (fps.length === 0) {
-          dom.topFPTableBody.innerHTML = '<tr><td colspan="4" class="td-empty">No False Positives recorded yet.</td></tr>';
-        } else {
-          dom.topFPTableBody.innerHTML = fps.map(f => `
-            <tr>
-              <td><strong>${escapeHtml(f.symbol || 'SOL')}</strong> <small class="dim-text">${f.mint.slice(0, 6)}...</small></td>
-              <td class="val-mono font-bold">$${Math.round(f.current_mcap_usd || 0).toLocaleString()}</td>
-              <td class="val-mono">$${Math.round(f.volume_24h || 0).toLocaleString()}</td>
-              <td><small>${escapeHtml(f.audit_notes || f.human_notes || 'Flagged high risk, community revived')}</small></td>
-            </tr>
-          `).join('');
-        }
-      }
-
-      // Render Top False Negatives (Missed slow rugs)
-      if (dom.topFNTableBody) {
-        const fns = data.top_false_negatives || [];
-        if (fns.length === 0) {
-          dom.topFNTableBody.innerHTML = '<tr><td colspan="4" class="td-empty">No False Negatives recorded yet.</td></tr>';
-        } else {
-          dom.topFNTableBody.innerHTML = fns.map(f => `
-            <tr>
-              <td><strong>${escapeHtml(f.symbol || 'SOL')}</strong> <small class="dim-text">${f.mint.slice(0, 6)}...</small></td>
-              <td class="val-mono font-bold">$${Math.round(f.current_mcap_usd || 0).toLocaleString()}</td>
-              <td class="val-mono">$${Math.round(f.volume_24h || 0).toLocaleString()}</td>
-              <td><small>${escapeHtml(f.audit_notes || f.human_notes || 'Predicted clean, soft-rugged later')}</small></td>
-            </tr>
-          `).join('');
-        }
-      }
+      // Render the currently active matrix quadrant table
+      filterMatrixQuadrant(activeMatrixQuadrant, false);
 
     } catch (e) {
       console.debug('Failed to load learning metrics:', e);
     }
   }
+
+  async function filterMatrixQuadrant(quadrant = 'tp', fetchFresh = true) {
+    activeMatrixQuadrant = quadrant.toLowerCase();
+
+    // 1. Highlight active matrix cell
+    const cells = [dom.cellMatrixTP, dom.cellMatrixFP, dom.cellMatrixFN, dom.cellMatrixTN];
+    cells.forEach(c => { if (c) c.classList.remove('active-selected'); });
+    if (activeMatrixQuadrant === 'tp' && dom.cellMatrixTP) dom.cellMatrixTP.classList.add('active-selected');
+    if (activeMatrixQuadrant === 'fp' && dom.cellMatrixFP) dom.cellMatrixFP.classList.add('active-selected');
+    if (activeMatrixQuadrant === 'fn' && dom.cellMatrixFN) dom.cellMatrixFN.classList.add('active-selected');
+    if (activeMatrixQuadrant === 'tn' && dom.cellMatrixTN) dom.cellMatrixTN.classList.add('active-selected');
+
+    // 2. Highlight active tab button
+    const tabs = [dom.tabMatrixTP, dom.tabMatrixFP, dom.tabMatrixFN, dom.tabMatrixTN];
+    tabs.forEach(t => { if (t) t.classList.remove('active'); });
+    if (activeMatrixQuadrant === 'tp' && dom.tabMatrixTP) dom.tabMatrixTP.classList.add('active');
+    if (activeMatrixQuadrant === 'fp' && dom.tabMatrixFP) dom.tabMatrixFP.classList.add('active');
+    if (activeMatrixQuadrant === 'fn' && dom.tabMatrixFN) dom.tabMatrixFN.classList.add('active');
+    if (activeMatrixQuadrant === 'tn' && dom.tabMatrixTN) dom.tabMatrixTN.classList.add('active');
+
+    // 3. Update Title & Hint
+    if (dom.matrixExplorerTitle) {
+      const titles = {
+        'tp': '🎯 Confirmed True Positives (Predicted Rug & Accurately Caught)',
+        'fp': '🤝 False Positives / CTOs (Predicted Rug, But Survived)',
+        'fn': '⚠️ False Negatives (Predicted Clean, But Slow-Rugged)',
+        'tn': '🛡️ True Negatives (Predicted Clean & Confirmed Survived)'
+      };
+      dom.matrixExplorerTitle.textContent = titles[activeMatrixQuadrant] || 'Confusion Matrix Coins';
+    }
+    if (dom.matrixExplorerHint) {
+      const hints = {
+        'tp': 'Tokens accurately caught by the forensic & Bayesian engine at launch that subsequent 10h audits confirmed dead.',
+        'fp': 'Tokens flagged high-risk at Block 0 that survived anyway (e.g. community takeovers or dev dump bought up).',
+        'fn': 'Tokens initially deemed low-risk that subsequently dumped or drained liquidity (missed soft-rugs).',
+        'tn': 'Tokens deemed low-risk that successfully survived, established organic liquidity, and held price floors.'
+      };
+      dom.matrixExplorerHint.textContent = hints[activeMatrixQuadrant] || '';
+    }
+
+    // 4. Fetch coins for this quadrant
+    if (!dom.matrixCohortTableBody) return;
+    dom.matrixCohortTableBody.innerHTML = '<tr><td colspan="7" class="td-loading">Loading quadrant tokens...</td></tr>';
+
+    try {
+      const res = await fetch(`/api/cohorts/matrix-tokens?type=${activeMatrixQuadrant}&limit=50`);
+      const data = await res.json();
+      const tokens = data.tokens || [];
+
+      if (tokens.length === 0) {
+        dom.matrixCohortTableBody.innerHTML = `<tr><td colspan="7" class="td-empty">No tokens in the ${activeMatrixQuadrant.toUpperCase()} quadrant.</td></tr>`;
+        return;
+      }
+
+      dom.matrixCohortTableBody.innerHTML = tokens.map(t => {
+        const tier = t.initial_risk_tier || 'LOW';
+        let tierBadgeClass = 'badge-low';
+        if (tier === 'CRITICAL') tierBadgeClass = 'badge-danger';
+        else if (tier === 'HIGH') tierBadgeClass = 'badge-warning';
+        else if (tier === 'MEDIUM') tierBadgeClass = 'badge-secondary';
+
+        const status = t.status || 'NEW';
+        let statusBadgeClass = 'badge-secondary';
+        if (status === 'CONFIRMED_RUG' || status === 'SLOW_RUG') statusBadgeClass = 'badge-danger';
+        else if (status === 'SURVIVING_CANDIDATE') statusBadgeClass = 'badge-success';
+        else if (status === 'CTO') statusBadgeClass = 'badge-accent';
+        else if (status === 'GRADUATED') statusBadgeClass = 'badge-primary';
+
+        const mcap = Math.round(t.current_mcap_usd || 0);
+        const vol = Math.round(t.volume_24h || 0);
+        const score = t.initial_risk_score != null ? t.initial_risk_score : 50;
+
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(t.symbol || 'PUMP')}</strong> 
+              <span style="font-size: 11px; color: var(--text-dim);">(${escapeHtml(t.name || '')})</span>
+            </td>
+            <td>
+              <a href="https://pump.fun/coin/${t.mint}" target="_blank" class="val-mono" style="color: #60a5fa; text-decoration: none;" title="View on Pump.fun">
+                ${t.mint.slice(0, 4)}...${t.mint.slice(-4)} ↗
+              </a>
+            </td>
+            <td>
+              <span class="badge ${tierBadgeClass}">${score} ${tier}</span>
+            </td>
+            <td>
+              <span class="badge ${statusBadgeClass}">${escapeHtml(status)}</span>
+            </td>
+            <td class="val-mono font-bold">$${mcap.toLocaleString()}</td>
+            <td class="val-mono">$${vol.toLocaleString()}</td>
+            <td><small style="color: var(--text-secondary);">${escapeHtml(t.audit_notes || t.human_notes || '—')}</small></td>
+          </tr>
+        `;
+      }).join('');
+
+    } catch (err) {
+      dom.matrixCohortTableBody.innerHTML = `<tr><td colspan="7" class="td-error">Failed to load quadrant tokens: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+  window.filterMatrixQuadrant = filterMatrixQuadrant;
 
   async function runCohortBatchAudit() {
     if (dom.btnRunCohortBatch) {

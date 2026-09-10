@@ -631,6 +631,20 @@ async def get_learning_metrics():
     return cohort_auditor.get_detailed_learning_metrics()
 
 
+@app.get("/api/cohorts/matrix-tokens")
+async def get_cohort_matrix_tokens(type: str = "tp", limit: int = 50, offset: int = 0):
+    """Fetch list of tokens belonging to a confusion matrix quadrant (tp, fp, fn, tn)."""
+    type_norm = type.lower()
+    if type_norm not in ["tp", "fp", "fn", "tn"]:
+        raise HTTPException(status_code=400, detail=f"Invalid matrix quadrant type '{type}'. Must be one of: tp, fp, fn, tn")
+    tokens = storage.get_cohort_matrix_tokens(matrix_type=type_norm, limit=limit, offset=offset)
+    return {
+        "type": type_norm,
+        "tokens": tokens,
+        "count": len(tokens)
+    }
+
+
 # ==========================================
 # Automated Paper Trading Strategy APIs
 # ==========================================

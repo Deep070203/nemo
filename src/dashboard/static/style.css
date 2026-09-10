@@ -1728,6 +1728,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  position: relative;
+}
+
+.matrix-cell:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.matrix-cell.active-selected {
+  outline: 2px solid #fff;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.3);
 }
 
 .matrix-cell.tp { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); }
@@ -1755,6 +1770,39 @@ body {
 .matrix-cell .m-sub {
   font-size: 10px;
   color: var(--text-dim);
+}
+
+.quadrant-tab-group {
+  display: flex;
+  gap: 6px;
+  background: var(--bg-surface);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.btn-matrix-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-main);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-matrix-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-matrix-tab.active {
+  color: #000;
+  background: #4ade80;
+  font-weight: 700;
 }
 
 .matrix-summary-row {

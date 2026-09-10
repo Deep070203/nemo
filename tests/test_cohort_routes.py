@@ -34,3 +34,23 @@ def test_cohort_learning_metrics_endpoint():
     data = response.json()
     assert "learning_metrics" in data
     assert "rule_attribution" in data
+
+
+def test_cohort_matrix_tokens_endpoint():
+    """Verify GET /api/cohorts/matrix-tokens returns tokens with metadata."""
+    response = client.get("/api/cohorts/matrix-tokens?type=tp&limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["type"] == "tp"
+    assert isinstance(data["tokens"], list)
+    if len(data["tokens"]) > 0:
+        first = data["tokens"][0]
+        assert "mint" in first
+        assert "symbol" in first
+        assert "initial_risk_tier" in first
+        assert "status" in first
+
+    # Invalid type should return 400
+    bad_res = client.get("/api/cohorts/matrix-tokens?type=invalid")
+    assert bad_res.status_code == 400
+

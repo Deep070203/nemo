@@ -481,6 +481,48 @@ class DuckDBStorage:
                 }
             }
 
+    def get_cohort_matrix_tokens(self, matrix_type: str = "tp", limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """Query tokens belonging to a specific confusion matrix quadrant.
+        
+        Quadrants:
+        - 'tp' (True Positives): Predicted Rug & Confirmed Rugged
+        - 'fp' (False Positives): Predicted Rug, but Survived (CTOs)
+        - 'fn' (False Negatives): Predicted Clean, but Slow-Rugged (Missed)
+        - 'tn' (True Negatives): Predicted Clean & Confirmed Survived
+        """
+        matrix_type = matrix_type.lower()
+        if matrix_type == "tp":
+            where_clause = "initial_risk_tier IN ('HIGH', 'CRITICAL') AND status IN ('CONFIRMED_RUG', 'SLOW_RUG')"
+            order_by = "updated_at DESC"
+        elif matrix_type == "fp":
+            where_clause = "initial_risk_tier IN ('HIGH', 'CRITICAL') AND status IN ('SURVIVING_CANDIDATE', 'GRADUATED', 'CTO')"
+            order_by = "current_mcap_usd DESC"
+        elif matrix_type == "fn":
+            where_clause = "initial_risk_tier = 'LOW' AND status IN ('CONFIRMED_RUG', 'SLOW_RUG')"
+            order_by = "updated_at DESC"
+        elif matrix_type == "tn":
+            where_clause = "initial_risk_tier = 'LOW' AND status IN ('SURVIVING_CANDIDATE', 'GRADUATED', 'CTO')"
+            order_by = "current_mcap_usd DESC"
+        else:
+            return []
+
+        query = f"""
+            SELECT 
+                mint, symbol, name, status,
+                initial_risk_score, initial_risk_tier,
+                current_price_usd, current_mcap_usd, volume_24h, price_change_24h,
+                audit_notes, human_notes, human_verdict, updated_at
+            FROM token_audits
+            WHERE {where_clause}
+            ORDER BY {order_by}
+            LIMIT $1 OFFSET $2;
+        """
+        try:
+            return self._conn.execute(query, [limit, offset]).df().to_dict(orient="records")
+        except Exception as e:
+            logger.debug(f"get_cohort_matrix_tokens error for {matrix_type}: {e}")
+            return []
+
     def close(self) -> None:
         """Close connection."""
         self._conn.close()
