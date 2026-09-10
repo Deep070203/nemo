@@ -9,8 +9,11 @@ import json
 import logging
 import re
 import numpy as np
+import time
+from collections import defaultdict
 from typing import Set, Dict, Any, List, Optional
 from datetime import datetime, timezone
+from dataclasses import asdict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -27,6 +30,7 @@ from src.forensics.cohort_worker import CohortAuditWorker
 from src.models.dataset_builder import DatasetBuilder
 from src.models.survival_model import SurvivalAnalysisEngine
 from src.models.classifier import RugPullClassifier
+from src.trading.paper_trader import PaperTradingEngine
 
 logger = logging.getLogger("nemo.dashboard_server")
 logging.basicConfig(level=logging.INFO)
@@ -84,10 +88,17 @@ pumpdev_client = PumpDevWebSocketClient(settings.websocket)
 recent_tokens: List[Dict[str, Any]] = []
 recent_trades: List[Dict[str, Any]] = []
 recent_reports: Dict[str, Dict[str, Any]] = {}
+token_metadata: Dict[str, Dict[str, Any]] = {}
+token_trade_counts: Dict[str, int] = defaultdict(int)
+token_creation_times: Dict[str, float] = {}
 
 # Cohort Batch Auditor & Background Worker
 cohort_auditor = CohortAuditor(storage, rpc_client)
 cohort_worker = CohortAuditWorker(storage, rpc_client, interval_seconds=600.0, hours_threshold=10.0)
+
+# Automated Paper Trading Engine (Scalper & Conviction Free-Roller)
+paper_trading_engine = PaperTradingEngine(storage)
+cohort_auditor.on_demote_callback = paper_trading_engine.handle_token_demoted
 
 
 async def on_new_token(event: TokenCreatedEvent):
@@ -132,6 +143,58 @@ async def run_background_audit(event: TokenCreatedEvent):
             "data": rep_dict,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+
+        token_creation_times[event.mint] = time.time()
+        token_metadata[event.mint] = {
+            "symbol": event.symbol or "PUMP",
+            "name": event.name or event.mint[:8]
+        }
+
+        # Dynamic Survivor Demotion Check:
+        # If token was previously in SURVIVING_CANDIDATE in DB and now failed audit (score >= 45 or flags), demote it!
+        try:
+            existing_audit = storage._conn.execute(
+                "SELECT status FROM token_audits WHERE mint = $1", [event.mint]
+            ).fetchone()
+            if existing_audit and existing_audit[0] in ("SURVIVING_CANDIDATE", "CTO"):
+                has_critical_flag = any(f in report.all_flags for f in [
+                    "WASH_LADDER_SYNDICATE", "CIRCULAR_PING_PONG_RING", "DEV_INITIAL_BUY_HIGH", "BLOCK0_SUPPLY_CORNERED"
+                ])
+                if report.forensic_risk_score >= 45 or has_critical_flag:
+                    storage._conn.execute("""
+                        UPDATE token_audits 
+                        SET status = 'CONFIRMED_RUG', 
+                            audit_notes = COALESCE(audit_notes, '') || ' | ⚠️ DEMOTED TO RUG: Forensic risk spiked to ' || $1 || ' on live re-scan.',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE mint = $2
+                    """, [str(report.forensic_risk_score), event.mint])
+
+                    # Trigger emergency exit in paper trading engine
+                    dump_trades = paper_trading_engine.handle_token_demoted(
+                        event.mint, 
+                        report.forensic_risk_score, 
+                        "Forensics flagged critical risk on live re-scan"
+                    )
+                    for dt in dump_trades:
+                        await ws_manager.broadcast({
+                            "type": "paper_trade_executed",
+                            "data": dt.__dict__,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        })
+
+                    await ws_manager.broadcast({
+                        "type": "token_demoted",
+                        "data": {
+                            "mint": event.mint,
+                            "new_status": "CONFIRMED_RUG",
+                            "risk_score": report.forensic_risk_score,
+                            "flags": report.all_flags
+                        },
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
+        except Exception as demote_err:
+            logger.debug(f"Demote check notice for {event.mint}: {demote_err}")
+
     except Exception as e:
         logger.debug(f"Audit error on {event.mint}: {e}")
 
@@ -152,6 +215,50 @@ async def on_new_trade(event: TokenTradeEvent):
         "data": data,
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
+
+    token_trade_counts[event.mint] += 1
+
+    # Paper trading position price update & exit trigger
+    exit_trades = paper_trading_engine.update_price(event.mint, event.price_sol)
+    for et in exit_trades:
+        await ws_manager.broadcast({
+            "type": "paper_trade_executed",
+            "data": et.__dict__,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    # Paper trading entry evaluation on real momentum (NOT at block 0)
+    # Require >= 8.0% curve progress and >= 8 real trades
+    if event.bonding_curve_progress_pct >= 8.0 and token_trade_counts[event.mint] >= 8:
+        rep_dict = recent_reports.get(event.mint)
+        if rep_dict:
+            try:
+                report = TokenForensicReport(**rep_dict)
+            except Exception:
+                report = None
+        else:
+            report = None
+
+        if report:
+            meta = token_metadata.get(event.mint, {})
+            age_sec = time.time() - token_creation_times.get(event.mint, time.time())
+            p_trades = paper_trading_engine.evaluate_token(
+                mint=event.mint,
+                symbol=meta.get("symbol", "PUMP"),
+                name=meta.get("name", event.mint[:8]),
+                price_sol=event.price_sol,
+                forensic_report=report,
+                bonding_curve_progress_pct=event.bonding_curve_progress_pct,
+                recent_trade_count=token_trade_counts[event.mint],
+                token_age_seconds=age_sec,
+                is_token_creation=False
+            )
+            for pt in p_trades:
+                await ws_manager.broadcast({
+                    "type": "paper_trade_executed",
+                    "data": pt.__dict__,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
 
 
 @app.on_event("startup")
@@ -522,6 +629,35 @@ async def record_human_audit_verdict(mint: str, payload: Dict[str, Any]):
 async def get_learning_metrics():
     """Get detailed model feedback, confusion matrix, and rule attribution."""
     return cohort_auditor.get_detailed_learning_metrics()
+
+
+# ==========================================
+# Automated Paper Trading Strategy APIs
+# ==========================================
+
+@app.get("/api/paper-trading/summary")
+async def get_paper_trading_summary():
+    """Fetch real-time portfolio balance, PnL, active positions, and telemetry for both strategies."""
+    return paper_trading_engine.get_summary_stats()
+
+
+@app.get("/api/paper-trading/trades")
+async def get_paper_trading_trades(limit: int = 50):
+    """Fetch executed paper trading history with detailed entry/exit reasons."""
+    return {
+        "trades": [asdict(t) for t in paper_trading_engine.trades_history[:limit]],
+        "count": len(paper_trading_engine.trades_history)
+    }
+
+
+@app.post("/api/paper-trading/reset")
+async def reset_paper_trading():
+    """Reset paper trading portfolios to starting 10 SOL per strategy."""
+    paper_trading_engine.reset_balances()
+    return {
+        "status": "success",
+        "message": "Paper trading portfolios successfully reset to 10.0 SOL per strategy."
+    }
 
 
 @app.websocket("/ws/live")

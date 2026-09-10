@@ -125,7 +125,11 @@ class ForensicsEngine:
             # 5. Microstructure: Trade Entropy & Wash Trading
             entropy_res = self.entropy_detector.compute(mint, trades)
             flags.extend(entropy_res.flags)
-            if entropy_res.is_wash_trading:
+            if entropy_res.is_micro_cadence_ladder:
+                score += 35
+            if entropy_res.is_circular_ring:
+                score += 35
+            elif entropy_res.is_wash_trading and not entropy_res.is_micro_cadence_ladder:
                 score += 30
 
         # 6. Content Forensics: pHash Meme Image Matching

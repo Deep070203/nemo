@@ -216,6 +216,7 @@ class CohortAuditor:
         now = datetime.now(timezone.utc)
         updated = 0
         revived_tokens = []
+        demoted_tokens = []
 
         for r in records:
             mint = r["mint"]
@@ -229,9 +230,18 @@ class CohortAuditor:
             change24 = m_info["price_change_24h"]
             is_graduated = m_info["is_graduated"]
 
-            # Resurrection / CTO Detection on "dead" rugs
+            # 1. Resurrection / CTO Detection on "dead" rugs
             was_rug = r["status"] in ("CONFIRMED_RUG", "SLOW_RUG")
             is_revived = was_rug and (current_mcap >= 30000.0 or vol24 >= 8000.0 or is_graduated)
+
+            # 2. Dynamic Survivor Demotion to Rug:
+            # If token was considered a survivor, but collapsed or failed re-scan, move to CONFIRMED_RUG
+            is_survivor = r["status"] in ("SURVIVING_CANDIDATE", "CTO")
+            is_demoted = is_survivor and (
+                (current_mcap < 3500.0 and vol24 < 300.0) or
+                change24 <= -85.0 or
+                (vol24 < 80.0 and not is_graduated)
+            )
 
             new_status = r["status"]
             notes = r.get("audit_notes") or ""
@@ -245,6 +255,21 @@ class CohortAuditor:
                     "volume_24h": vol24
                 })
                 notes += f" | ⚡ REVIVED / CTO DETECTED: Mcap surged to ${current_mcap:,.0f} with ${vol24:,.0f} volume!"
+            elif is_demoted:
+                new_status = "CONFIRMED_RUG"
+                demoted_tokens.append({
+                    "mint": mint,
+                    "symbol": r.get("symbol"),
+                    "mcap": current_mcap,
+                    "volume_24h": vol24,
+                    "reason": f"Mcap dropped to ${current_mcap:,.0f} (24h change {change24:.1f}%, vol ${vol24:,.0f})"
+                })
+                notes += f" | ⚠️ DEMOTED TO CONFIRMED RUG: Price collapsed to ${current_mcap:,.0f} ({change24:.1f}%), abandoned volume."
+                if hasattr(self, "on_demote_callback") and self.on_demote_callback:
+                    try:
+                        self.on_demote_callback(mint, 75.0, "Market collapse / abandoned liquidity")
+                    except Exception as e:
+                        logger.debug(f"Demote callback error: {e}")
 
             r["current_price_usd"] = price_usd
             r["current_mcap_usd"] = current_mcap
@@ -264,6 +289,8 @@ class CohortAuditor:
             "updated": updated,
             "revived_count": len(revived_tokens),
             "revived_tokens": revived_tokens,
+            "demoted_count": len(demoted_tokens),
+            "demoted_tokens": demoted_tokens,
             "timestamp": now.isoformat()
         }
 

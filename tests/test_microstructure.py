@@ -117,3 +117,45 @@ def test_social_auditor_dummy_detection():
     assert auditor._is_dummy_link("https://twitter.com/") is True
     assert auditor._is_dummy_link("https://t.me") is True
     assert auditor._is_dummy_link("https://x.com/real_project_official") is False
+
+
+def test_micro_cadence_wash_ladder():
+    detector = TradeEntropyDetector()
+    # 30 trades where 80% are 0.0003 SOL micro-buys (simulating the syndicate ladder bot)
+    trades = []
+    for i in range(30):
+        trades.append({
+            "tx_type": "buy",
+            "sol_amount": 0.0003 if i % 5 != 0 else 0.5,
+            "user": f"wallet_{i}"
+        })
+
+    res = detector.compute("mint_micro_ladder", trades)
+
+    assert res.is_micro_cadence_ladder is True
+    assert res.is_wash_trading is True
+    assert res.risk_level == "CRITICAL"
+    assert res.micro_trade_pct >= 70.0
+    assert any("MICRO_CADENCE_WASH_LADDER" in f for f in res.flags)
+
+
+def test_circular_ping_pong_ring():
+    detector = TradeEntropyDetector()
+    # 40 trades cycling across only 5 wallets (simulating the BHns... circular ring bot)
+    closed_ring = [f"ring_wallet_{w}" for w in range(5)]
+    trades = []
+    for i in range(40):
+        trades.append({
+            "tx_type": "buy",
+            "sol_amount": 0.005,
+            "user": closed_ring[i % len(closed_ring)]
+        })
+
+    res = detector.compute("mint_circular_ring", trades)
+
+    assert res.is_circular_ring is True
+    assert res.is_wash_trading is True
+    assert res.risk_level == "CRITICAL"
+    assert res.circular_wallet_ratio >= 5.0
+    assert any("CIRCULAR_PING_PONG_RING" in f for f in res.flags)
+

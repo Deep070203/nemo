@@ -152,6 +152,29 @@
     ruleAttributionBody: document.getElementById('ruleAttributionBody'),
     topFPTableBody: document.getElementById('topFPTableBody'),
     topFNTableBody: document.getElementById('topFNTableBody'),
+
+    // Paper Trading View Elements
+    btnViewPaperTrading: document.getElementById('btnViewPaperTrading'),
+    paperTradingView: document.getElementById('paperTradingView'),
+    paperActiveBadge: document.getElementById('paperActiveBadge'),
+    scalpPortfolioVal: document.getElementById('scalpPortfolioVal'),
+    scalpCashVal: document.getElementById('scalpCashVal'),
+    scalpRealizedPnl: document.getElementById('scalpRealizedPnl'),
+    scalpReturnPct: document.getElementById('scalpReturnPct'),
+    scalpWinRate: document.getElementById('scalpWinRate'),
+    scalpOpenCount: document.getElementById('scalpOpenCount'),
+    freerollPortfolioVal: document.getElementById('freerollPortfolioVal'),
+    freerollCashVal: document.getElementById('freerollCashVal'),
+    freerollRealizedPnl: document.getElementById('freerollRealizedPnl'),
+    freerollReturnPct: document.getElementById('freerollReturnPct'),
+    freerollMoonbags: document.getElementById('freerollMoonbags'),
+    freerollOpenCount: document.getElementById('freerollOpenCount'),
+    paperTotalPortfolio: document.getElementById('paperTotalPortfolio'),
+    paperTotalRealizedPnl: document.getElementById('paperTotalRealizedPnl'),
+    activePositionsCountBadge: document.getElementById('activePositionsCountBadge'),
+    paperPositionsTableBody: document.getElementById('paperPositionsTableBody'),
+    totalTradesBadge: document.getElementById('totalTradesBadge'),
+    paperTradesTableBody: document.getElementById('paperTradesTableBody'),
   };
 
   // Initialize
@@ -262,6 +285,29 @@
         // Refresh inspector if currently open
         if (state.activeMint === report.mint) {
           renderInspector(state.tokens.get(report.mint), report);
+        }
+        break;
+
+      case 'paper_trade_executed':
+        if (dom.paperTradingView && dom.paperTradingView.style.display !== 'none') {
+          loadPaperTradingData();
+        } else {
+          // Update the pill badge count
+          fetch('/api/paper-trading/summary').then(r => r.json()).then(s => {
+            if (dom.paperActiveBadge) dom.paperActiveBadge.textContent = s.active_positions_count || 0;
+          }).catch(() => {});
+        }
+        break;
+
+      case 'token_demoted':
+        // If viewing cohort tables, refresh to reflect the token moving from Survivors to Rugs
+        if (dom.cohortDashboardView && dom.cohortDashboardView.style.display !== 'none') {
+          fetchCohortSummary();
+          switchCohortBucketTab(activeCohortBucket);
+        }
+        // Update paper trading UI if open
+        if (dom.paperTradingView && dom.paperTradingView.style.display !== 'none') {
+          loadPaperTradingData();
         }
         break;
     }
@@ -697,10 +743,9 @@
     });
 
     // Top View Mode Switcher
-    if (dom.btnViewLiveStream && dom.btnViewCohorts) {
-      dom.btnViewLiveStream.addEventListener('click', () => switchViewMode('stream'));
-      dom.btnViewCohorts.addEventListener('click', () => switchViewMode('cohorts'));
-    }
+    if (dom.btnViewLiveStream) dom.btnViewLiveStream.addEventListener('click', () => switchViewMode('stream'));
+    if (dom.btnViewCohorts) dom.btnViewCohorts.addEventListener('click', () => switchViewMode('cohorts'));
+    if (dom.btnViewPaperTrading) dom.btnViewPaperTrading.addEventListener('click', () => switchViewMode('papertrading'));
 
     // Cohort Tabs Switcher
     const cohortTabBtns = [dom.tabBtnRugs, dom.tabBtnSurvivors, dom.tabBtnReaudit, dom.tabBtnLearning];
@@ -835,18 +880,176 @@
     if (mode === 'stream') {
       if (dom.btnViewLiveStream) dom.btnViewLiveStream.classList.add('active');
       if (dom.btnViewCohorts) dom.btnViewCohorts.classList.remove('active');
+      if (dom.btnViewPaperTrading) dom.btnViewPaperTrading.classList.remove('active');
       if (dom.streamDashboardView) dom.streamDashboardView.style.display = 'grid';
       if (dom.cohortDashboardView) dom.cohortDashboardView.style.display = 'none';
-    } else {
+      if (dom.paperTradingView) dom.paperTradingView.style.display = 'none';
+    } else if (mode === 'cohorts') {
       if (dom.btnViewLiveStream) dom.btnViewLiveStream.classList.remove('active');
       if (dom.btnViewCohorts) dom.btnViewCohorts.classList.add('active');
+      if (dom.btnViewPaperTrading) dom.btnViewPaperTrading.classList.remove('active');
       if (dom.streamDashboardView) dom.streamDashboardView.style.display = 'none';
       if (dom.cohortDashboardView) dom.cohortDashboardView.style.display = 'flex';
+      if (dom.paperTradingView) dom.paperTradingView.style.display = 'none';
       fetchCohortSummary();
       switchCohortBucketTab(activeCohortBucket);
+    } else if (mode === 'papertrading') {
+      if (dom.btnViewLiveStream) dom.btnViewLiveStream.classList.remove('active');
+      if (dom.btnViewCohorts) dom.btnViewCohorts.classList.remove('active');
+      if (dom.btnViewPaperTrading) dom.btnViewPaperTrading.classList.add('active');
+      if (dom.streamDashboardView) dom.streamDashboardView.style.display = 'none';
+      if (dom.cohortDashboardView) dom.cohortDashboardView.style.display = 'none';
+      if (dom.paperTradingView) dom.paperTradingView.style.display = 'flex';
+      loadPaperTradingData();
     }
   }
   window.switchViewMode = switchViewMode;
+
+  async function loadPaperTradingData() {
+    try {
+      const [sumRes, tradesRes] = await Promise.all([
+        fetch('/api/paper-trading/summary'),
+        fetch('/api/paper-trading/trades?limit=60')
+      ]);
+      const summary = await sumRes.json();
+      const tradesData = await tradesRes.json();
+
+      const scalp = summary.strategies?.SEAL_SCALPER || {};
+      const freeroll = summary.strategies?.OLDWHALE_FREEROLLER || {};
+
+      // Scalper Metrics
+      if (dom.scalpPortfolioVal) dom.scalpPortfolioVal.textContent = `${(scalp.portfolio_value_sol || 10).toFixed(2)} SOL`;
+      if (dom.scalpCashVal) dom.scalpCashVal.textContent = `${(scalp.cash_sol || 10).toFixed(2)} SOL`;
+      if (dom.scalpRealizedPnl) {
+        const pnl = scalp.realized_pnl_sol || 0;
+        dom.scalpRealizedPnl.textContent = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
+        dom.scalpRealizedPnl.className = `s-val ${pnl >= 0 ? 'profit' : 'loss'}`;
+      }
+      if (dom.scalpReturnPct) {
+        const ret = scalp.total_return_pct || 0;
+        dom.scalpReturnPct.textContent = `${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%`;
+        dom.scalpReturnPct.className = `s-val ${ret >= 0 ? 'profit' : 'loss'}`;
+      }
+      if (dom.scalpWinRate) dom.scalpWinRate.textContent = `${(scalp.win_rate_pct || 0).toFixed(1)}%`;
+      if (dom.scalpOpenCount) dom.scalpOpenCount.textContent = scalp.active_positions_count || 0;
+
+      // OldWhale Metrics
+      if (dom.freerollPortfolioVal) dom.freerollPortfolioVal.textContent = `${(freeroll.portfolio_value_sol || 10).toFixed(2)} SOL`;
+      if (dom.freerollCashVal) dom.freerollCashVal.textContent = `${(freeroll.cash_sol || 10).toFixed(2)} SOL`;
+      if (dom.freerollRealizedPnl) {
+        const pnl = freeroll.realized_pnl_sol || 0;
+        dom.freerollRealizedPnl.textContent = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
+        dom.freerollRealizedPnl.className = `s-val ${pnl >= 0 ? 'profit' : 'loss'}`;
+      }
+      if (dom.freerollReturnPct) {
+        const ret = freeroll.total_return_pct || 0;
+        dom.freerollReturnPct.textContent = `${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%`;
+        dom.freerollReturnPct.className = `s-val ${ret >= 0 ? 'profit' : 'loss'}`;
+      }
+      if (dom.freerollMoonbags) dom.freerollMoonbags.textContent = freeroll.moonbags_retained || 0;
+      if (dom.freerollOpenCount) dom.freerollOpenCount.textContent = freeroll.active_positions_count || 0;
+
+      // Totals
+      if (dom.paperTotalPortfolio) dom.paperTotalPortfolio.textContent = `${(summary.total_portfolio_sol || 20).toFixed(2)} SOL`;
+      if (dom.paperTotalRealizedPnl) {
+        const totPnl = summary.total_realized_pnl_sol || 0;
+        dom.paperTotalRealizedPnl.textContent = `${totPnl >= 0 ? '+' : ''}${totPnl.toFixed(4)} SOL`;
+        dom.paperTotalRealizedPnl.className = totPnl >= 0 ? 'profit' : 'loss';
+      }
+      const activeCount = summary.active_positions_count || 0;
+      if (dom.activePositionsCountBadge) dom.activePositionsCountBadge.textContent = `${activeCount} Open`;
+      if (dom.paperActiveBadge) dom.paperActiveBadge.textContent = activeCount;
+
+      // Render Active Positions Table
+      const allPositions = [
+        ...(scalp.active_positions || []),
+        ...(freeroll.active_positions || [])
+      ];
+      if (dom.paperPositionsTableBody) {
+        if (allPositions.length === 0) {
+          dom.paperPositionsTableBody.innerHTML = '<tr><td colspan="9" class="td-empty">No active paper trading positions. Awaiting clean momentum signals...</td></tr>';
+        } else {
+          dom.paperPositionsTableBody.innerHTML = allPositions.map(pos => {
+            const isScalp = pos.strategy === 'SEAL_SCALPER';
+            const pnl = pos.unrealized_pnl_pct != null ? pos.unrealized_pnl_pct : 0;
+            const pnlClass = pnl >= 0 ? 'profit' : 'loss';
+            const targetText = isScalp 
+              ? (pos.tp1_executed ? 'TP2 at +80%' : 'TP1 at +30%') 
+              : (pos.freeroll_executed ? '🚀 Risk-Free Moonbag' : 'Break-Even at 2x (+100%)');
+            const initialSol = (pos.initial_sol_invested != null ? pos.initial_sol_invested : 0);
+            const marketValSol = (pos.current_market_value_sol != null ? pos.current_market_value_sol : (pos.remaining_tokens * (pos.current_price_sol || 0)) || 0);
+            return `
+              <tr>
+                <td><span class="strat-badge ${isScalp ? 'scalp' : 'freeroll'}">${isScalp ? 'SEAL SCALP' : 'OLDWHALE'}</span></td>
+                <td><strong>${escapeHtml(pos.symbol || 'UNKNOWN')}</strong> <span style="font-size: 11px; color: var(--text-dim);">(${escapeHtml(pos.name || '')})</span></td>
+                <td><code class="val-mono">${escapeHtml((pos.mint || '').slice(0, 4))}...${escapeHtml((pos.mint || '').slice(-4))}</code></td>
+                <td class="val-mono">${((pos.entry_price_sol || 0) * 1e9).toFixed(1)} lam</td>
+                <td class="val-mono">${((pos.current_price_sol || 0) * 1e9).toFixed(1)} lam</td>
+                <td><strong class="${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%</strong></td>
+                <td class="val-mono">${initialSol.toFixed(2)} SOL</td>
+                <td class="val-mono">${marketValSol.toFixed(4)} SOL</td>
+                <td><span class="badge ${pos.freeroll_executed ? 'badge-accent' : 'badge-secondary'}">${targetText}</span></td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+
+      // Render Trades Execution Log Table
+      const trades = tradesData.trades || [];
+      if (dom.totalTradesBadge) dom.totalTradesBadge.textContent = `${trades.length} Executions`;
+      if (dom.paperTradesTableBody) {
+        if (trades.length === 0) {
+          dom.paperTradesTableBody.innerHTML = '<tr><td colspan="8" class="td-empty">No trades executed yet. Ingestion pipeline is scanning live bonding curve events...</td></tr>';
+        } else {
+          dom.paperTradesTableBody.innerHTML = trades.map(t => {
+            const isScalp = t.strategy === 'SEAL_SCALPER';
+            let actionTagClass = 'buy';
+            let reasonBoxClass = 'tp';
+            if (t.action.includes('TP')) { actionTagClass = 'tp1'; reasonBoxClass = 'tp'; }
+            else if (t.action.includes('FREE_ROLL')) { actionTagClass = 'free-roll'; reasonBoxClass = 'freeroll'; }
+            else if (t.action.includes('STOP')) { actionTagClass = 'stop'; reasonBoxClass = 'stop'; }
+            else if (t.action.includes('EMERGENCY')) { actionTagClass = 'emergency'; reasonBoxClass = 'emergency'; }
+
+            const pnl = t.realized_pnl_sol || 0;
+            const pnlClass = pnl > 0 ? 'profit' : (pnl < 0 ? 'loss' : '');
+            return `
+              <tr>
+                <td style="font-size: 11px; color: var(--text-dim);">${escapeHtml(t.timestamp)}</td>
+                <td><span class="strat-badge ${isScalp ? 'scalp' : 'freeroll'}">${isScalp ? 'SEAL SCALP' : 'OLDWHALE'}</span></td>
+                <td><span class="action-tag ${actionTagClass}">${escapeHtml(t.action)}</span></td>
+                <td><strong>${escapeHtml(t.symbol)}</strong> <code class="val-mono" style="font-size: 10px;">(${escapeHtml(t.mint.slice(0, 4))}...${escapeHtml(t.mint.slice(-4))})</code></td>
+                <td class="val-mono">${(t.sol_amount || 0).toFixed(4)} SOL</td>
+                <td><strong class="${pnlClass}">${pnl !== 0 ? (pnl > 0 ? '+' : '') + pnl.toFixed(4) + ' SOL' : '—'}</strong></td>
+                <td><strong class="${pnlClass}">${t.pnl_pct !== 0 ? (t.pnl_pct > 0 ? '+' : '') + t.pnl_pct.toFixed(1) + '%' : '—'}</strong></td>
+                <td><div class="td-reason-box ${reasonBoxClass}">${escapeHtml(t.reason)}</div></td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+
+    } catch (err) {
+      console.warn('Error loading paper trading data:', err);
+    }
+  }
+  window.loadPaperTradingData = loadPaperTradingData;
+
+  async function resetPaperTrading() {
+    if (!confirm('Are you sure you want to reset paper trading portfolios to 10.0 SOL? All active positions and history will be cleared.')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/paper-trading/reset', { method: 'POST' });
+      const data = await res.json();
+      alert(data.message || 'Portfolios reset successfully.');
+      loadPaperTradingData();
+    } catch (err) {
+      alert('Error resetting paper trading: ' + err);
+    }
+  }
+  window.resetPaperTrading = resetPaperTrading;
+
 
   async function fetchCohortSummary() {
     try {

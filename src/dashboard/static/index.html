@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=3.5">
+  <link rel="stylesheet" href="/static/style.css?v=4.0">
 </head>
 <body>
   <div class="app-container">
@@ -41,12 +41,17 @@
             <span>COHORT AUDIT & LEARNING</span>
             <span class="switcher-pill" id="cohortPendingBadge">0</span>
           </button>
+          <button class="switcher-btn" id="btnViewPaperTrading" onclick="window.switchViewMode('papertrading')">
+            <span class="btn-icon">🤖</span>
+            <span>PAPER TRADING & STRATEGIES</span>
+            <span class="switcher-pill" id="paperActiveBadge">0</span>
+          </button>
         </div>
 
         <!-- Header Controls & Survival Trigger -->
         <div class="header-right-actions">
-          <button id="btnRunAudit" class="btn btn-secondary btn-sm">⚡ Re-Audit Active</button>
-          <button id="btnViewSurvival" class="btn btn-accent btn-sm">📊 Survival Model</button>
+          <button id="btnRunAudit" class="btn btn-secondary btn-sm">⚡ Re-Audit Active Asset</button>
+          <button id="btnViewSurvival" class="btn btn-accent btn-sm">📈 Survival & Hazard Model</button>
         </div>
       </div>
 
@@ -54,27 +59,27 @@
       <div class="sub-command-strip">
         <div class="omni-search-box">
           <span class="omni-lens">🔍</span>
-          <input type="text" id="inspectCoinInput" placeholder="Paste ANY Solana mint or EVM address to inspect (e.g. 7Y1Cv...pump, HcRLc..., or 0x39dB...)" autocomplete="off" />
+          <input type="text" id="inspectCoinInput" placeholder="Paste ANY Solana mint address to audit (e.g. 5gJA...pump, BHns...pump, iJwe...pump)" autocomplete="off" />
           <button id="btnInspectClear" class="btn-clear-search" title="Clear" style="display: none;">✕</button>
-          <button id="btnInspectCoin" class="btn btn-primary btn-sm">⚡ Audit & Predict</button>
+          <button id="btnInspectCoin" class="btn btn-primary btn-sm">⚡ Deep Audit & Predict</button>
         </div>
 
         <!-- Real-time telemetry badges -->
         <div class="telemetry-badges">
           <div class="tele-item">
-            <span class="tele-label">TOKENS</span>
+            <span class="tele-label">MONITORED ASSETS</span>
             <span class="tele-val" id="statTokensCount">0</span>
           </div>
           <div class="tele-item">
-            <span class="tele-label">TRADES</span>
+            <span class="tele-label">EXECUTIONS</span>
             <span class="tele-val" id="statTradesCount">0</span>
           </div>
           <div class="tele-item danger">
-            <span class="tele-label">SOFT RUGS</span>
+            <span class="tele-label">CONFIRMED RUGS</span>
             <span class="tele-val" id="statRugsCount">0</span>
           </div>
           <div class="tele-item warning">
-            <span class="tele-label">HIGH RISK</span>
+            <span class="tele-label">HIGH RISK RATIO</span>
             <span class="tele-val" id="statRiskRatio">0%</span>
           </div>
         </div>
@@ -107,16 +112,16 @@
       <section class="panel panel-left" aria-labelledby="tokensFeedHeading">
         <div class="panel-header">
           <div class="panel-title-wrap">
-            <h2 id="tokensFeedHeading" class="panel-title">LIVE TOKEN STREAM</h2>
-            <span class="badge badge-pulse" id="liveTokenCounter">0 tokens</span>
+            <h2 id="tokensFeedHeading" class="panel-title">LIVE INGESTION FEED</h2>
+            <span class="badge badge-pulse" id="liveTokenCounter">0 assets</span>
           </div>
           <div class="filter-bar">
             <input type="text" id="tokenSearchInput" placeholder="Filter symbol, mint, or dev..." autocomplete="off">
             <div class="filter-chips">
               <button class="chip active" data-filter="all">ALL</button>
-              <button class="chip chip-green" data-filter="clean">CLEAN</button>
-              <button class="chip chip-yellow" data-filter="medium">MEDIUM</button>
-              <button class="chip chip-red" data-filter="critical">RUG / HIGH</button>
+              <button class="chip chip-green" data-filter="clean">VERIFIED CLEAN</button>
+              <button class="chip chip-yellow" data-filter="medium">ELEVATED RISK</button>
+              <button class="chip chip-red" data-filter="critical">SYNDICATE / RUG</button>
             </div>
           </div>
         </div>
@@ -132,9 +137,9 @@
       <!-- CENTER COLUMN: Deep Forensic Inspector -->
       <section class="panel panel-center" aria-labelledby="inspectorHeading">
         <div class="panel-header">
-          <h2 id="inspectorHeading" class="panel-title">DEEP FORENSIC AUDIT</h2>
+          <h2 id="inspectorHeading" class="panel-title">QUANT FORENSIC ENGINE</h2>
           <div class="inspector-controls">
-            <span class="mono-tag" id="selectedMintTag">NO TOKEN SELECTED</span>
+            <span class="mono-tag" id="selectedMintTag">NO ASSET SELECTED</span>
             <button id="btnCopyMint" class="btn-icon" title="Copy Mint" style="display:none;">📋</button>
             <a id="btnPumpLink" href="#" target="_blank" class="btn-icon" title="View on Pump.fun" style="display:none;">🔗</a>
           </div>
@@ -144,8 +149,8 @@
           <!-- Empty State -->
           <div class="inspector-placeholder" id="inspectorPlaceholder">
             <div class="placeholder-icon">🔬</div>
-            <h3>Select Any Token to Audit</h3>
-            <p>Click on any incoming token on the left stream to inspect on-chain Block-0 bundles, Jito tips, Sybil wallet clusters, and VPIN order flow toxicity.</p>
+            <h3>Select Any Ingested Asset to Audit</h3>
+            <p>Click on any asset from the stream to inspect Block-0 Jito bundles, Sybil wallet rings, micro-cadence wash ladders, and order flow toxicity in real time.</p>
           </div>
 
           <!-- Active Inspector Content (Hidden initially) -->
@@ -176,7 +181,7 @@
 
             <!-- Triggered Flags Alert Box -->
             <div class="flags-container" id="inspectorFlagsContainer">
-              <h4 class="section-title">Triggered Alerts & Forensic Flags</h4>
+              <h4 class="section-title">SECURITY TELEMETRY & SYNDICATE THREAT DETECTIONS</h4>
               <div class="flags-list" id="inspectorFlagsList">
                 <span class="flag-pill clean">No malicious heuristics triggered</span>
               </div>
@@ -366,31 +371,31 @@
       <section class="cohort-summary-bar">
         <div class="cohort-stat-group">
           <div class="stat-card" id="cardCohortTotal">
-            <span class="stat-label">TOTAL AUDITED</span>
+            <span class="stat-label">ASSETS EVALUATED</span>
             <span class="stat-value" id="statCohortTotal">0</span>
           </div>
           <div class="stat-card danger" id="cardCohortRugs">
-            <span class="stat-label">💀 RUG GRAVEYARD</span>
+            <span class="stat-label">CONFIRMED RUGS</span>
             <span class="stat-value" id="statCohortRugs">0</span>
           </div>
           <div class="stat-card success" id="cardCohortSurvivors">
-            <span class="stat-label">🛡️ SURVIVING (T+10H)</span>
+            <span class="stat-label">VERIFIED SURVIVORS</span>
             <span class="stat-value" id="statCohortSurvivors">0</span>
           </div>
           <div class="stat-card warning" id="cardCohortReaudit">
-            <span class="stat-label">🔍 RE-AUDIT DUE (3-10D)</span>
+            <span class="stat-label">MULTI-DAY RE-AUDIT</span>
             <span class="stat-value" id="statCohortReaudit">0</span>
           </div>
           <div class="stat-card info" id="cardCohortGraduated">
-            <span class="stat-label">🚀 GRADUATED / RAYDIUM</span>
+            <span class="stat-label">DEX GRADUATED</span>
             <span class="stat-value" id="statCohortGraduated">0</span>
           </div>
           <div class="stat-card cto" id="cardCohortCTO">
-            <span class="stat-label">🤝 CTO TAKEOVERS</span>
+            <span class="stat-label">COMMUNITY TAKEOVERS</span>
             <span class="stat-value" id="statCohortCTO">0</span>
           </div>
           <div class="stat-card precision" id="cardCohortPrecision">
-            <span class="stat-label">🎯 MODEL PRECISION</span>
+            <span class="stat-label">MODEL PRECISION</span>
             <span class="stat-value" id="statCohortPrecision">0.0%</span>
           </div>
         </div>
@@ -400,7 +405,7 @@
             <span>⚡</span> Run Batch Audit (T+10h)
           </button>
           <button id="btnReloadRugPrices" class="btn btn-secondary">
-            <span>🔄</span> Reload Rug Prices
+            <span>🔄</span> Reload Dex Prices
           </button>
         </div>
       </section>
@@ -408,16 +413,16 @@
       <!-- Cohort Navigation Tabs -->
       <div class="cohort-tabs-nav">
         <button class="cohort-tab-btn active" id="tabBtnRugs" data-bucket="rugs" onclick="window.switchCohortBucketTab('rugs')">
-          💀 Rug Graveyard (<span id="countTabRugs">0</span>)
+          💀 Confirmed Rugs (<span id="countTabRugs">0</span>)
         </button>
         <button class="cohort-tab-btn" id="tabBtnSurvivors" data-bucket="survivors" onclick="window.switchCohortBucketTab('survivors')">
-          🛡️ Surviving Candidates (<span id="countTabSurvivors">0</span>)
+          🛡️ Verified Survivors (<span id="countTabSurvivors">0</span>)
         </button>
         <button class="cohort-tab-btn" id="tabBtnReaudit" data-bucket="reaudit" onclick="window.switchCohortBucketTab('reaudit')">
-          🔍 Multi-Day Re-Audit (<span id="countTabReaudit">0</span>)
+          🔍 Multi-Day Tracking (<span id="countTabReaudit">0</span>)
         </button>
         <button class="cohort-tab-btn" id="tabBtnLearning" data-bucket="learning" onclick="window.switchCohortBucketTab('learning')">
-          🧠 Active Learning & Model Feedback
+          🧠 Active Learning & Model Precision
         </button>
       </div>
 
@@ -618,10 +623,169 @@
         </div>
 
       </div>
-
     </main>
-  </div>
 
-  <script src="/static/app.js?v=3.5"></script>
+    <!-- MASTER VIEW 3: AUTOMATED PAPER TRADING & STRATEGIES HUD -->
+    <main id="paperTradingView" class="tab-view paper-trading-view" style="display: none;">
+        
+        <!-- Top Strategy Telemetry Strip -->
+        <div class="paper-telemetry-grid">
+          <!-- Strategy 1: Seal Scalper -->
+          <div class="strategy-hero-card" id="cardSealScalper">
+            <div class="strat-header">
+              <div class="strat-title-group">
+                <span class="strat-icon">⚡</span>
+                <div>
+                  <h3 class="strat-name">SEAL SCALPER</h3>
+                  <span class="strat-badge scalp">MOMENTUM SCALPING</span>
+                </div>
+              </div>
+              <div class="strat-cap-badge">
+                <span class="cap-lbl">PORTFOLIO</span>
+                <span class="cap-val" id="scalpPortfolioVal">10.00 SOL</span>
+              </div>
+            </div>
+            <p class="strat-desc">
+              Inspired by <code>glowingseal9825</code>. Enters high-velocity momentum runners with clean forensics (Score &le; 30). Sizes 0.50 SOL with automated TP1 (+30%), TP2 (+80%), and trailing stop (-12%).
+            </p>
+            <div class="strat-metrics-row">
+              <div class="s-metric">
+                <span class="s-lbl">CASH BALANCE</span>
+                <span class="s-val" id="scalpCashVal">10.00 SOL</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">REALIZED PNL</span>
+                <span class="s-val profit" id="scalpRealizedPnl">+0.0000 SOL</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">TOTAL RETURN</span>
+                <span class="s-val" id="scalpReturnPct">0.0%</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">WIN RATE</span>
+                <span class="s-val" id="scalpWinRate">0.0%</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">OPEN TRADES</span>
+                <span class="s-val" id="scalpOpenCount">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Strategy 2: OldWhale Conviction Free-Roller -->
+          <div class="strategy-hero-card" id="cardOldWhale">
+            <div class="strat-header">
+              <div class="strat-title-group">
+                <span class="strat-icon">🐋</span>
+                <div>
+                  <h3 class="strat-name">OLDWHALE FREE-ROLLER</h3>
+                  <span class="strat-badge freeroll">CONVICTION ACCUMULATOR</span>
+                </div>
+              </div>
+              <div class="strat-cap-badge">
+                <span class="cap-lbl">PORTFOLIO</span>
+                <span class="cap-val" id="freerollPortfolioVal">10.00 SOL</span>
+              </div>
+            </div>
+            <p class="strat-desc">
+              Inspired by <code>oldwhale06352</code> ($100k portfolio). Enters organic survivor candidates (Risk &le; 25, Dev &le; 5%). Sizes 1.00 SOL; at 2x price (+100%), sells 50% to retrieve 100% of initial SOL capital, holding the rest as a risk-free moonbag.
+            </p>
+            <div class="strat-metrics-row">
+              <div class="s-metric">
+                <span class="s-lbl">CASH BALANCE</span>
+                <span class="s-val" id="freerollCashVal">10.00 SOL</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">REALIZED PNL</span>
+                <span class="s-val profit" id="freerollRealizedPnl">+0.0000 SOL</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">TOTAL RETURN</span>
+                <span class="s-val" id="freerollReturnPct">0.0%</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">MOONBAGS HELD</span>
+                <span class="s-val moonbag" id="freerollMoonbags">0</span>
+              </div>
+              <div class="s-metric">
+                <span class="s-lbl">OPEN TRADES</span>
+                <span class="s-val" id="freerollOpenCount">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Global Action Bar -->
+        <div class="paper-actions-bar">
+          <div class="total-summary">
+            <span>COMBINED PORTFOLIO: <strong id="paperTotalPortfolio">20.00 SOL</strong></span>
+            <span class="separator">•</span>
+            <span>TOTAL REALIZED PNL: <strong id="paperTotalRealizedPnl" class="profit">+0.0000 SOL</strong></span>
+          </div>
+          <div class="action-buttons">
+            <button id="btnRefreshPaper" class="btn btn-secondary btn-sm" onclick="window.loadPaperTradingData()">🔄 Refresh Positions</button>
+            <button id="btnResetPaper" class="btn btn-danger btn-sm" onclick="window.resetPaperTrading()">⚠️ Reset Portfolios (10 SOL each)</button>
+          </div>
+        </div>
+
+        <!-- Active Open Positions Section -->
+        <div class="paper-section">
+          <div class="section-title-wrap">
+            <h4>📊 Active Paper Positions</h4>
+            <span class="badge badge-accent" id="activePositionsCountBadge">0 Open</span>
+          </div>
+          <div class="cohort-table-wrap">
+            <table class="cohort-table">
+              <thead>
+                <tr>
+                  <th>STRATEGY</th>
+                  <th>TOKEN / ASSET</th>
+                  <th>MINT ADDRESS</th>
+                  <th>ENTRY PRICE</th>
+                  <th>CURRENT PRICE</th>
+                  <th>UNREALIZED PNL</th>
+                  <th>INITIAL CAPITAL</th>
+                  <th>CURRENT VALUE</th>
+                  <th>STATUS / TARGET</th>
+                </tr>
+              </thead>
+              <tbody id="paperPositionsTableBody">
+                <tr><td colspan="9" class="td-empty">No active paper trading positions. Awaiting clean momentum signals...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Trade Execution History with Reasons -->
+        <div class="paper-section">
+          <div class="section-title-wrap">
+            <h4>📜 Live Execution Audit Log (Entries, Exits & Reasons)</h4>
+            <span class="badge badge-secondary" id="totalTradesBadge">0 Executions</span>
+          </div>
+          <div class="cohort-table-wrap">
+            <table class="cohort-table">
+              <thead>
+                <tr>
+                  <th>TIMESTAMP (UTC)</th>
+                  <th>STRATEGY</th>
+                  <th>ACTION</th>
+                  <th>TOKEN</th>
+                  <th>SOL AMOUNT</th>
+                  <th>REALIZED PNL</th>
+                  <th>PNL %</th>
+                  <th>EXECUTION REASON & FORENSIC RATIONALE</th>
+                </tr>
+              </thead>
+              <tbody id="paperTradesTableBody">
+                <tr><td colspan="8" class="td-empty">No trades executed yet. Ingestion pipeline is scanning live bonding curve events...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+  <script src="/static/app.js?v=4.0"></script>
 </body>
 </html>
